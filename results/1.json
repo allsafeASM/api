@@ -1,0 +1,1501 @@
+{
+  "scan_id": 1,
+  "domain": "psu.edu.eg",
+  "scan_stats": {
+    "start_time": "2024-12-23T13:46:13.7090778+02:00",
+    "end_time": "2024-12-23T13:46:39.549921519+02:00",
+    "duration_seconds": 25.840843802,
+    "status": "completed",
+    "error_message": "",
+    "subdomain_count": 47,
+    "resolved_count": 47,
+    "open_port_count": 0,
+    "total_ports_scanned": 184
+  },
+  "subdomains": [
+    {
+      "name": "edu.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "complaints.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "ict.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.245"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "tico.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "qac.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "kind.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "fldc.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "pt.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "pharm.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "oesc.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 22,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 8000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.250"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "psuh.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "elc.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.245"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "com.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "med.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "spc.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "spsu.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 7070,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.53"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "dthesis.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.245"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "su.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.245"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "spcd.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "arts.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "essd.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "oes.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 22,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.249"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "phyd.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "conf.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "mis.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.245"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "env.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.245"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "nur.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "sci.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "www.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.9"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "staff.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 7070,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.53"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "students.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.245"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "spu.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.245"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "ictp.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.245"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "portal.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "193.227.1.190"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.9"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "crl.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.51"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "staffcms.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.245"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "library.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.245"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "mac.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "net.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.245"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "prt.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.245"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "excellence.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "post.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.245"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "eul.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.245"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "law.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "himc.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    },
+    {
+      "name": "eng.psu.edu.eg",
+      "status": "active",
+      "open_ports": [
+        {
+          "port": 3306,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 443,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 5060,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 2000,
+          "service": "",
+          "protocol": "tcp"
+        },
+        {
+          "port": 80,
+          "service": "",
+          "protocol": "tcp"
+        }
+      ],
+      "resolution": {
+        "A": [
+          "195.246.39.24"
+        ],
+        "CNAME": null
+      }
+    }
+  ]
+}

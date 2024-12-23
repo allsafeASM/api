@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# Endpoint URL
+URL="http://localhost:8080/scan"
+
+# List of domains, with psu.edu.eg included
+DOMAINS=("psu.edu.eg" "example.com" "github.com" "google.com" "microsoft.com" "yahoo.com" "twitter.com" "linkedin.com" "reddit.com" "wikipedia.org")
+
+# Loop from 1 to 10
+for SCAN_ID in {1..10}; do
+  DOMAIN="${DOMAINS[$SCAN_ID-1]}" # Select domain based on loop index (SCAN_ID-1)
+
+  echo "Sending request with scan_id: $SCAN_ID for domain: $DOMAIN"
+
+  # Use curl to send the POST request
+  curl -X POST "$URL" \
+       -H "Content-Type: application/json" \
+       -d "{\"domain\": \"$DOMAIN\", \"scan_id\": $SCAN_ID}"
+
+  echo -e "\nRequest with scan_id: $SCAN_ID for domain: $DOMAIN sent.\n"
+
+  sleep 0.2 # Optional: add a delay (0.2 seconds) between requests
+done
+
