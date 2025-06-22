@@ -13,9 +13,7 @@ func main() {
 
   // Create a new RabbitMQ connection
   conn, err := rabbitmq.NewConnectionManager()
-  if err != nil {
-    log.Fatalf("Failed to create RabbitMQ connection: %v", err)
-  }
+	utils.FailOnError(err, "Failed to create RabbitMQ connection")
   defer conn.Close()
 
   // Enable QoS with prefetch count = 1

@@ -5,7 +5,6 @@ import (
   "os"
   "fmt"
   "encoding/json"
-  "io/ioutil"
   "api/config"
   "api/internal/models"
 )
@@ -35,7 +34,7 @@ func SaveToFile(res models.ScanResponse) error {
   }
 
   // Write the JSON data to the file
-  err = ioutil.WriteFile(filename, json, 0644)
+	err = os.WriteFile(filename, json, 0644)
   if err != nil {
     return err
   }
