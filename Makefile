@@ -40,6 +40,6 @@ docker-build:
 	docker build -t allsafe-asm .
 
 # Development with hot reload (requires air: go install github.com/cosmtrek/air@latest)
-dev:
-	@echo "Running with hot reload..."
-	air -c .air.toml 
+# dev:
+# 	@echo "Running with hot reload..."
+# 	air -c .air.toml 

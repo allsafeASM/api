@@ -5,6 +5,7 @@ go 1.24.4
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus v1.9.0
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.1
+	github.com/projectdiscovery/gologger v1.1.54
 	github.com/projectdiscovery/subfinder/v2 v2.8.0
 )
 
@@ -81,7 +82,6 @@ require (
 	github.com/projectdiscovery/dnsx v1.2.2 // indirect
 	github.com/projectdiscovery/fastdialer v0.4.1 // indirect
 	github.com/projectdiscovery/goflags v0.1.74 // indirect
-	github.com/projectdiscovery/gologger v1.1.54 // indirect
 	github.com/projectdiscovery/hmap v0.0.89 // indirect
 	github.com/projectdiscovery/machineid v0.0.0-20240226150047-2e2c51e35983 // indirect
 	github.com/projectdiscovery/networkpolicy v0.1.15 // indirect

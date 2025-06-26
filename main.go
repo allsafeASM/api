@@ -28,6 +28,7 @@ func main() {
 	gologger.Info().Msgf("  Queue Name: %s", cfg.Azure.QueueName)
 	gologger.Info().Msgf("  Blob Container: %s", cfg.Azure.BlobContainerName)
 	gologger.Info().Msgf("  Poll Interval: %d seconds", cfg.App.PollInterval)
+	gologger.Info().Msgf("  Scanner Timeout: %d Minutes", cfg.App.ScannerTimeout)
 	gologger.Info().Msgf("  Log Level: %s", cfg.App.LogLevel)
 
 	// Create Azure clients
@@ -49,7 +50,8 @@ func main() {
 	}
 
 	// Create task handler
-	taskHandler := handlers.NewTaskHandler(blobClient)
+	scannerTimeout := time.Duration(cfg.App.ScannerTimeout) * time.Second
+	taskHandler := handlers.NewTaskHandler(blobClient, scannerTimeout)
 
 	// Create context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())

@@ -22,9 +22,9 @@ type AzureConfig struct {
 
 // AppConfig holds application-specific configuration
 type AppConfig struct {
-	LogLevel     string
-	MaxWorkers   int
-	PollInterval int // seconds
+	LogLevel       string
+	PollInterval   int // seconds
+	ScannerTimeout int // seconds
 }
 
 // Load loads configuration from environment variables
@@ -38,9 +38,9 @@ func Load() *Config {
 			BlobContainerName:           getEnv("BLOB_CONTAINER_NAME", "scan-outputs"),
 		},
 		App: AppConfig{
-			LogLevel:     getEnv("LOG_LEVEL", "info"),
-			MaxWorkers:   getEnvAsInt("MAX_WORKERS", 5),
-			PollInterval: getEnvAsInt("POLL_INTERVAL", 2),
+			LogLevel:       getEnv("LOG_LEVEL", "info"),
+			PollInterval:   getEnvAsInt("POLL_INTERVAL", 2),
+			ScannerTimeout: getEnvAsInt("SCANNER_TIMEOUT", 60), // 1 hour
 		},
 	}
 }

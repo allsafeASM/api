@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/allsafeASM/api/internal/azure"
@@ -13,18 +14,20 @@ import (
 
 // TaskHandler handles task processing and result storage
 type TaskHandler struct {
-	blobClient *azure.BlobStorageClient
+	blobClient     *azure.BlobStorageClient
+	scannerTimeout time.Duration
 }
 
 // NewTaskHandler creates a new task handler
-func NewTaskHandler(blobClient *azure.BlobStorageClient) *TaskHandler {
+func NewTaskHandler(blobClient *azure.BlobStorageClient, scannerTimeout time.Duration) *TaskHandler {
 	return &TaskHandler{
-		blobClient: blobClient,
+		blobClient:     blobClient,
+		scannerTimeout: scannerTimeout,
 	}
 }
 
 // HandleTask processes a task and stores the result
-func (h *TaskHandler) HandleTask(ctx context.Context, taskMsg *models.TaskMessage) error {
+func (h *TaskHandler) HandleTask(ctx context.Context, taskMsg *models.TaskMessage) *azure.MessageProcessingResult {
 	gologger.Info().Msgf("Processing task: %s for domain: %s", taskMsg.Task, taskMsg.Domain)
 
 	// Create task result
@@ -36,15 +39,19 @@ func (h *TaskHandler) HandleTask(ctx context.Context, taskMsg *models.TaskMessag
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 
+	// Create context with timeout for scanner operations
+	scannerCtx, cancel := context.WithTimeout(ctx, h.scannerTimeout)
+	defer cancel()
+
 	// Process the task based on type
 	var err error
 	switch taskMsg.Task {
 	case models.TaskTypeSubfinder:
-		err = h.handleSubfinderTask(ctx, result)
+		err = h.handleSubfinderTask(scannerCtx, result)
 	case models.TaskTypePortScan:
-		err = h.handlePortScanTask(ctx, result)
+		err = h.handlePortScanTask(scannerCtx, result)
 	case models.TaskTypeHttpx:
-		err = h.handleHttpxTask(ctx, result)
+		err = h.handleHttpxTask(scannerCtx, result)
 	default:
 		err = fmt.Errorf("unknown task type: %s", taskMsg.Task)
 	}
@@ -54,18 +61,86 @@ func (h *TaskHandler) HandleTask(ctx context.Context, taskMsg *models.TaskMessag
 		result.Status = models.TaskStatusFailed
 		result.Error = err.Error()
 		gologger.Error().Msgf("Task failed: %v", err)
-	} else {
-		result.Status = models.TaskStatusCompleted
-		gologger.Info().Msg("Task completed successfully")
+
+		// Determine if error is retryable
+		retryable := h.isRetryableError(err)
+
+		return &azure.MessageProcessingResult{
+			Success:   false,
+			Error:     err,
+			Retryable: retryable,
+		}
 	}
+
+	result.Status = models.TaskStatusCompleted
+	gologger.Info().Msg("Task completed successfully")
 
 	// Store result in blob storage
 	if storeErr := h.blobClient.StoreTaskResult(ctx, result); storeErr != nil {
 		gologger.Error().Msgf("Failed to store task result: %v", storeErr)
-		return storeErr
+
+		// Storage errors are usually retryable
+		return &azure.MessageProcessingResult{
+			Success:   false,
+			Error:     storeErr,
+			Retryable: true,
+		}
 	}
 
-	return err
+	return &azure.MessageProcessingResult{
+		Success:   true,
+		Error:     nil,
+		Retryable: false,
+	}
+}
+
+// isRetryableError determines if an error should be retried
+func (h *TaskHandler) isRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errStr := strings.ToLower(err.Error())
+
+	// Permanent errors (non-retryable)
+	permanentErrors := []string{
+		"unknown task type",
+		"domain is required",
+		"invalid domain",
+		"not yet implemented",
+		"permission denied",
+		"unauthorized",
+		"forbidden",
+	}
+
+	for _, permanentErr := range permanentErrors {
+		if strings.Contains(errStr, permanentErr) {
+			return false
+		}
+	}
+
+	// Retryable errors
+	retryableErrors := []string{
+		"timeout",
+		"connection",
+		"network",
+		"temporary",
+		"rate limit",
+		"throttle",
+		"service unavailable",
+		"internal server error",
+		"bad gateway",
+		"gateway timeout",
+	}
+
+	for _, retryableErr := range retryableErrors {
+		if strings.Contains(errStr, retryableErr) {
+			return true
+		}
+	}
+
+	// Default to retryable for unknown errors
+	return true
 }
 
 // handleSubfinderTask processes subfinder tasks
@@ -74,7 +149,11 @@ func (h *TaskHandler) handleSubfinderTask(ctx context.Context, result *models.Ta
 		return fmt.Errorf("domain is required for subfinder task")
 	}
 
-	subdomains := scanners.RunSubfinder(result.Domain)
+	subdomains, err := scanners.RunSubfinder(ctx, result.Domain)
+	if err != nil {
+		return fmt.Errorf("subfinder failed: %w", err)
+	}
+
 	result.Data = map[string]interface{}{
 		"subdomains": subdomains,
 		"count":      len(subdomains),
@@ -90,12 +169,17 @@ func (h *TaskHandler) handlePortScanTask(ctx context.Context, result *models.Tas
 		return fmt.Errorf("domain is required for portscan task")
 	}
 
-	// TODO: Implement port scanning
-	result.Data = map[string]interface{}{
-		"message": "Port scanning not yet implemented",
+	ports, err := scanners.RunPortScanner(ctx, result.Domain)
+	if err != nil {
+		return fmt.Errorf("port scanner failed: %w", err)
 	}
 
-	gologger.Info().Msgf("Port scanning not yet implemented for domain: %s", result.Domain)
+	result.Data = map[string]interface{}{
+		"ports": ports,
+		"count": len(ports),
+	}
+
+	gologger.Info().Msgf("Port scanning completed. Found %d open ports for %s", len(ports), result.Domain)
 	return nil
 }
 
@@ -105,12 +189,17 @@ func (h *TaskHandler) handleHttpxTask(ctx context.Context, result *models.TaskRe
 		return fmt.Errorf("domain is required for httpx task")
 	}
 
-	// TODO: Implement httpx scanning
-	result.Data = map[string]interface{}{
-		"message": "HTTPX not yet implemented",
+	results, err := scanners.RunHttpx(ctx, result.Domain)
+	if err != nil {
+		return fmt.Errorf("httpx failed: %w", err)
 	}
 
-	gologger.Info().Msgf("HTTPX not yet implemented for domain: %s", result.Domain)
+	result.Data = map[string]interface{}{
+		"results": results,
+		"count":   len(results),
+	}
+
+	gologger.Info().Msgf("HTTPX completed. Found %d results for %s", len(results), result.Domain)
 	return nil
 }
 

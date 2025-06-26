@@ -98,11 +98,35 @@ Supported task types:
 
 ## Task Processing Flow
 
-1. **Queue**: Task is received from Azure Service Bus queue
-2. **Processing**: Worker picks up task from queue
-3. **Execution**: Appropriate scanner is executed
+1. **Queue**: Task is received from Azure Service Bus queue in PeekLock mode
+2. **Processing**: Worker picks up task from queue with retry logic
+3. **Execution**: Appropriate scanner is executed with timeout
 4. **Storage**: Results are stored in Azure Blob Storage
-5. **Completion**: Task is marked as completed
+5. **Completion**: Task is marked as completed or moved to DLQ
+
+### Message Processing Strategy
+
+The worker implements a robust message processing system:
+
+#### **Success Path**
+- ✅ **CompleteMessage()** - Message processed successfully
+
+#### **Retryable Errors** (e.g., network timeouts, rate limits)
+- 🔄 **In-process retries** - Up to 3 attempts with exponential backoff
+- 🔄 **AbandonMessage()** - If still failing after retries, let Service Bus handle re-delivery
+
+#### **Permanent Errors** (e.g., invalid task type, missing domain)
+- 🚫 **DeadLetterMessage()** - Move to Dead Letter Queue immediately
+- 🚫 **No retries** - Prevents unnecessary processing attempts
+
+#### **Error Classification**
+- **Retryable**: Network issues, timeouts, rate limits, temporary service unavailability
+- **Non-retryable**: Invalid message format, unknown task types, permission errors
+
+#### **Configuration**
+- **Scanner Timeout**: `SCANNER_TIMEOUT=300` (5 minutes default)
+- **Poll Interval**: `POLL_INTERVAL=2` (seconds between queue checks)
+- **Max Retries**: 3 attempts with exponential backoff (1s, 2s, 4s)
 
 ## Task Results
 

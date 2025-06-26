@@ -10,7 +10,7 @@ import (
 	"github.com/projectdiscovery/subfinder/v2/pkg/runner"
 )
 
-func RunSubfinder(domain string) []string {
+func RunSubfinder(ctx context.Context, domain string) ([]string, error) {
 	// Configure Subfinder options
 	subfinderOpts := &runner.Options{
 		Threads:            10,
@@ -24,13 +24,13 @@ func RunSubfinder(domain string) []string {
 	// Create Subfinder runner
 	subfinder, err := runner.NewRunner(subfinderOpts)
 	if err != nil {
-		log.Fatalf("failed to create subfinder runner: %v", err)
+		return nil, err
 	}
 
 	// Capture Subfinder output
 	output := &bytes.Buffer{}
-	if _, err = subfinder.EnumerateSingleDomainWithCtx(context.Background(), domain, []io.Writer{output}); err != nil {
-		log.Fatalf("failed to enumerate single domain: %v", err)
+	if _, err = subfinder.EnumerateSingleDomainWithCtx(ctx, domain, []io.Writer{output}); err != nil {
+		return nil, err
 	}
 
 	// Process output to extract subdomains
@@ -49,5 +49,5 @@ func RunSubfinder(domain string) []string {
 			subdomains = append(subdomains, lineStr)
 		}
 	}
-	return subdomains
+	return subdomains, nil
 }
