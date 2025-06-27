@@ -17,16 +17,6 @@ type ServiceBusClient struct {
 	queueName string
 }
 
-// MessageProcessingResult represents the result of processing a message
-type MessageProcessingResult struct {
-	Success bool
-	Error   error
-	// Retryable indicates if the error is transient and should be retried
-	Retryable bool
-	// RetryCount is the number of times this message has been retried
-	RetryCount int
-}
-
 // NewServiceBusClient creates a new Service Bus client
 func NewServiceBusClient(connectionString, queueName string) (*ServiceBusClient, error) {
 	client, err := azservicebus.NewClientFromConnectionString(connectionString, nil)
@@ -120,8 +110,11 @@ func (s *ServiceBusClient) SendMessage(ctx context.Context, message interface{})
 }
 
 // ProcessMessages processes messages from the queue with a handler function
-func (s *ServiceBusClient) ProcessMessages(ctx context.Context, handler func(context.Context, *models.TaskMessage) *MessageProcessingResult, pollInterval time.Duration) error {
-	receiver, err := s.client.NewReceiverForQueue(s.queueName, nil)
+func (s *ServiceBusClient) ProcessMessages(ctx context.Context, handler func(context.Context, *models.TaskMessage) *models.MessageProcessingResult, pollInterval time.Duration, lockRenewalInterval time.Duration, maxLockRenewalTime time.Duration, scannerTimeout time.Duration) error {
+	// Create receiver with AutoRenewTimeout for automatic lock renewal
+	receiver, err := s.client.NewReceiverForQueue(s.queueName, &azservicebus.ReceiverOptions{
+		ReceiveMode: azservicebus.ReceiveModePeekLock,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to create receiver: %w", err)
 	}
@@ -152,14 +145,17 @@ func (s *ServiceBusClient) ProcessMessages(ctx context.Context, handler func(con
 			if err := json.Unmarshal(message.Body, &taskMsg); err != nil {
 				gologger.Error().Msgf("Failed to parse message as JSON: %v", err)
 				// This is a permanent error - move to dead letter queue
-				if deadLetterErr := s.DeadLetterMessage(ctx, message, "InvalidMessageFormat", fmt.Sprintf("Failed to parse JSON: %v", err)); deadLetterErr != nil {
+				if deadLetterErr := receiver.DeadLetterMessage(ctx, message, &azservicebus.DeadLetterOptions{
+					Reason:           &[]string{"InvalidMessageFormat"}[0],
+					ErrorDescription: &[]string{fmt.Sprintf("Failed to parse JSON: %v", err)}[0],
+				}); deadLetterErr != nil {
 					gologger.Error().Msgf("Failed to move message to dead letter queue: %v", deadLetterErr)
 				}
 				continue
 			}
 
-			// Process the message with retry logic
-			result := s.processMessageWithRetry(ctx, &taskMsg, handler, message)
+			// Process the message with retry logic and auto-renewal
+			result := s.processMessageWithRetryAndRenewal(ctx, &taskMsg, handler, message, receiver, lockRenewalInterval, maxLockRenewalTime, scannerTimeout)
 
 			// Handle the result
 			if result.Success {
@@ -205,8 +201,8 @@ func (s *ServiceBusClient) ProcessMessages(ctx context.Context, handler func(con
 	}
 }
 
-// processMessageWithRetry processes a message with retry logic
-func (s *ServiceBusClient) processMessageWithRetry(ctx context.Context, taskMsg *models.TaskMessage, handler func(context.Context, *models.TaskMessage) *MessageProcessingResult, message *azservicebus.ReceivedMessage) *MessageProcessingResult {
+// processMessageWithRetryAndRenewal processes a message with retry logic and auto-renewal
+func (s *ServiceBusClient) processMessageWithRetryAndRenewal(ctx context.Context, taskMsg *models.TaskMessage, handler func(context.Context, *models.TaskMessage) *models.MessageProcessingResult, message *azservicebus.ReceivedMessage, receiver *azservicebus.Receiver, lockRenewalInterval time.Duration, maxLockRenewalTime time.Duration, scannerTimeout time.Duration) *models.MessageProcessingResult {
 	maxRetries := 3
 	baseDelay := 1 * time.Second
 
@@ -214,7 +210,7 @@ func (s *ServiceBusClient) processMessageWithRetry(ctx context.Context, taskMsg 
 		// Check if context is cancelled
 		select {
 		case <-ctx.Done():
-			return &MessageProcessingResult{
+			return &models.MessageProcessingResult{
 				Success:    false,
 				Error:      ctx.Err(),
 				Retryable:  false,
@@ -223,8 +219,13 @@ func (s *ServiceBusClient) processMessageWithRetry(ctx context.Context, taskMsg 
 		default:
 		}
 
-		// Process the message
-		result := handler(ctx, taskMsg)
+		// Create a context with timeout for the handler
+		handlerCtx, cancel := context.WithTimeout(ctx, scannerTimeout) // Use configurable scanner timeout
+
+		// Process the message with auto-renewal
+		result := s.processMessageWithRenewal(handlerCtx, taskMsg, handler, message, receiver, lockRenewalInterval, maxLockRenewalTime)
+		cancel()
+
 		result.RetryCount = attempt
 
 		if result.Success {
@@ -243,7 +244,7 @@ func (s *ServiceBusClient) processMessageWithRetry(ctx context.Context, taskMsg 
 		// Wait before retry
 		select {
 		case <-ctx.Done():
-			return &MessageProcessingResult{
+			return &models.MessageProcessingResult{
 				Success:    false,
 				Error:      ctx.Err(),
 				Retryable:  false,
@@ -254,10 +255,62 @@ func (s *ServiceBusClient) processMessageWithRetry(ctx context.Context, taskMsg 
 		}
 	}
 
-	return &MessageProcessingResult{
+	return &models.MessageProcessingResult{
 		Success:    false,
 		Error:      fmt.Errorf("max retries exceeded"),
 		Retryable:  false,
 		RetryCount: maxRetries,
+	}
+}
+
+// processMessageWithRenewal processes a message with automatic lock renewal
+func (s *ServiceBusClient) processMessageWithRenewal(ctx context.Context, taskMsg *models.TaskMessage, handler func(context.Context, *models.TaskMessage) *models.MessageProcessingResult, message *azservicebus.ReceivedMessage, receiver *azservicebus.Receiver, lockRenewalInterval time.Duration, maxLockRenewalTime time.Duration) *models.MessageProcessingResult {
+	// Create a channel to signal completion
+	done := make(chan *models.MessageProcessingResult, 1)
+
+	// Start the handler in a goroutine
+	go func() {
+		result := handler(ctx, taskMsg)
+		done <- result
+	}()
+
+	// Start lock renewal goroutine with maximum time limit
+	renewalCtx, cancelRenewal := context.WithTimeout(context.Background(), maxLockRenewalTime)
+	defer cancelRenewal()
+
+	go func() {
+		ticker := time.NewTicker(lockRenewalInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-renewalCtx.Done():
+				gologger.Debug().Msg("Lock renewal stopped due to timeout or cancellation")
+				return
+			case <-ticker.C:
+				// Renew the message lock
+				if err := receiver.RenewMessageLock(ctx, message, nil); err != nil {
+					gologger.Warning().Msgf("Failed to renew message lock: %v", err)
+					// If renewal fails, we should stop processing
+					cancelRenewal()
+					return
+				}
+				gologger.Debug().Msg("Message lock renewed successfully")
+			}
+		}
+	}()
+
+	// Wait for either completion or context cancellation
+	select {
+	case <-ctx.Done():
+		cancelRenewal()
+		return &models.MessageProcessingResult{
+			Success:   false,
+			Error:     ctx.Err(),
+			Retryable: true, // Context cancellation is usually retryable
+		}
+	case result := <-done:
+		cancelRenewal()
+		return result
 	}
 }

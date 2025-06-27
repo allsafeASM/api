@@ -3,34 +3,40 @@ package scanners
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
-	"log"
 	"strings"
 
+	"github.com/projectdiscovery/gologger"
 	"github.com/projectdiscovery/subfinder/v2/pkg/runner"
 )
 
 func RunSubfinder(ctx context.Context, domain string) ([]string, error) {
-	// Configure Subfinder options
+	// Configure Subfinder options with more reasonable timeouts
 	subfinderOpts := &runner.Options{
 		Threads:            10,
-		Timeout:            30,
-		MaxEnumerationTime: 10,
+		Timeout:            60, // Increased from 30 to 60 seconds
+		MaxEnumerationTime: 30, // Increased from 10 to 30 seconds
 	}
-
-	// Disable timestamps in logs
-	log.SetFlags(0)
 
 	// Create Subfinder runner
 	subfinder, err := runner.NewRunner(subfinderOpts)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create subfinder runner: %w", err)
 	}
 
 	// Capture Subfinder output
 	output := &bytes.Buffer{}
+
+	// Run subfinder with context
 	if _, err = subfinder.EnumerateSingleDomainWithCtx(ctx, domain, []io.Writer{output}); err != nil {
-		return nil, err
+		// Check if context was cancelled
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+			return nil, fmt.Errorf("subfinder enumeration failed: %w", err)
+		}
 	}
 
 	// Process output to extract subdomains
@@ -49,5 +55,7 @@ func RunSubfinder(ctx context.Context, domain string) ([]string, error) {
 			subdomains = append(subdomains, lineStr)
 		}
 	}
+
+	gologger.Debug().Msgf("Subfinder found %d subdomains for domain: %s", len(subdomains), domain)
 	return subdomains, nil
 }

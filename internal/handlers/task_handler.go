@@ -3,37 +3,69 @@ package handlers
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/allsafeASM/api/internal/azure"
+	"github.com/allsafeASM/api/internal/errors"
 	"github.com/allsafeASM/api/internal/models"
+	"github.com/allsafeASM/api/internal/notification"
+	"github.com/allsafeASM/api/internal/validation"
 	"github.com/allsafeASM/api/scanners"
 	"github.com/projectdiscovery/gologger"
 )
 
 // TaskHandler handles task processing and result storage
 type TaskHandler struct {
-	blobClient     *azure.BlobStorageClient
-	scannerTimeout time.Duration
+	blobClient          *azure.BlobStorageClient
+	scannerTimeout      time.Duration
+	domainValidator     *validation.DomainValidator
+	errorClassifier     *errors.ErrorClassifier
+	notifier            *notification.Notifier
+	enableNotifications bool
 }
 
 // NewTaskHandler creates a new task handler
-func NewTaskHandler(blobClient *azure.BlobStorageClient, scannerTimeout time.Duration) *TaskHandler {
+func NewTaskHandler(blobClient *azure.BlobStorageClient, scannerTimeout time.Duration, notifier *notification.Notifier, enableNotifications bool) *TaskHandler {
 	return &TaskHandler{
-		blobClient:     blobClient,
-		scannerTimeout: scannerTimeout,
+		blobClient:          blobClient,
+		scannerTimeout:      scannerTimeout,
+		domainValidator:     validation.NewDomainValidator(),
+		errorClassifier:     errors.NewErrorClassifier(),
+		notifier:            notifier,
+		enableNotifications: enableNotifications,
 	}
 }
 
 // HandleTask processes a task and stores the result
-func (h *TaskHandler) HandleTask(ctx context.Context, taskMsg *models.TaskMessage) *azure.MessageProcessingResult {
+func (h *TaskHandler) HandleTask(ctx context.Context, taskMsg *models.TaskMessage) *models.MessageProcessingResult {
 	gologger.Info().Msgf("Processing task: %s for domain: %s", taskMsg.Task, taskMsg.Domain)
+
+	// Validate task message
+	if taskMsg.Domain == "" {
+		err := fmt.Errorf("domain is required for task processing")
+		gologger.Error().Msgf("Task validation failed: %v", err)
+		return &models.MessageProcessingResult{
+			Success:   false,
+			Error:     err,
+			Retryable: false,
+		}
+	}
+
+	// Validate domain format (basic validation)
+	if !h.domainValidator.IsValidDomain(taskMsg.Domain) {
+		err := fmt.Errorf("invalid domain format: %s", taskMsg.Domain)
+		gologger.Error().Msgf("Task validation failed: %v", err)
+		return &models.MessageProcessingResult{
+			Success:   false,
+			Error:     err,
+			Retryable: false,
+		}
+	}
 
 	// Create task result
 	result := &models.TaskResult{
-		TaskID:    generateTaskID(),
-		TaskType:  taskMsg.Task,
+		ScanID:    taskMsg.ScanID,
+		Task:      models.Task(taskMsg.Task),
 		Domain:    taskMsg.Domain,
 		Status:    models.TaskStatusRunning,
 		Timestamp: time.Now().Format(time.RFC3339),
@@ -46,26 +78,26 @@ func (h *TaskHandler) HandleTask(ctx context.Context, taskMsg *models.TaskMessag
 	// Process the task based on type
 	var err error
 	switch taskMsg.Task {
-	case models.TaskTypeSubfinder:
+	case models.TaskSubfinder:
 		err = h.handleSubfinderTask(scannerCtx, result)
-	case models.TaskTypePortScan:
+	case models.TaskPortScan:
 		err = h.handlePortScanTask(scannerCtx, result)
-	case models.TaskTypeHttpx:
+	case models.TaskHttpx:
 		err = h.handleHttpxTask(scannerCtx, result)
-	default:
-		err = fmt.Errorf("unknown task type: %s", taskMsg.Task)
+	default: // Assume it's subfinder
+		err = h.handleSubfinderTask(scannerCtx, result)
 	}
 
 	// Update result status
 	if err != nil {
 		result.Status = models.TaskStatusFailed
 		result.Error = err.Error()
-		gologger.Error().Msgf("Task failed: %v", err)
+		gologger.Error().Msgf("Task failed for domain %s: %v", taskMsg.Domain, err)
 
 		// Determine if error is retryable
-		retryable := h.isRetryableError(err)
+		retryable := h.errorClassifier.IsRetryableError(err)
 
-		return &azure.MessageProcessingResult{
+		return &models.MessageProcessingResult{
 			Success:   false,
 			Error:     err,
 			Retryable: retryable,
@@ -73,74 +105,33 @@ func (h *TaskHandler) HandleTask(ctx context.Context, taskMsg *models.TaskMessag
 	}
 
 	result.Status = models.TaskStatusCompleted
-	gologger.Info().Msg("Task completed successfully")
+	gologger.Info().Msgf("Task completed successfully for domain: %s", taskMsg.Domain)
 
 	// Store result in blob storage
 	if storeErr := h.blobClient.StoreTaskResult(ctx, result); storeErr != nil {
-		gologger.Error().Msgf("Failed to store task result: %v", storeErr)
+		gologger.Error().Msgf("Failed to store task result for domain %s: %v", taskMsg.Domain, storeErr)
 
 		// Storage errors are usually retryable
-		return &azure.MessageProcessingResult{
+		return &models.MessageProcessingResult{
 			Success:   false,
 			Error:     storeErr,
 			Retryable: true,
 		}
 	}
 
-	return &azure.MessageProcessingResult{
+	// Send completion notification if enabled
+	if h.enableNotifications && h.notifier != nil {
+		if notifyErr := h.sendCompletionNotification(ctx, taskMsg, result); notifyErr != nil {
+			gologger.Warning().Msgf("Failed to send completion notification for domain %s: %v", taskMsg.Domain, notifyErr)
+			// Don't fail the task if notification fails, just log it
+		}
+	}
+
+	return &models.MessageProcessingResult{
 		Success:   true,
 		Error:     nil,
 		Retryable: false,
 	}
-}
-
-// isRetryableError determines if an error should be retried
-func (h *TaskHandler) isRetryableError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	errStr := strings.ToLower(err.Error())
-
-	// Permanent errors (non-retryable)
-	permanentErrors := []string{
-		"unknown task type",
-		"domain is required",
-		"invalid domain",
-		"not yet implemented",
-		"permission denied",
-		"unauthorized",
-		"forbidden",
-	}
-
-	for _, permanentErr := range permanentErrors {
-		if strings.Contains(errStr, permanentErr) {
-			return false
-		}
-	}
-
-	// Retryable errors
-	retryableErrors := []string{
-		"timeout",
-		"connection",
-		"network",
-		"temporary",
-		"rate limit",
-		"throttle",
-		"service unavailable",
-		"internal server error",
-		"bad gateway",
-		"gateway timeout",
-	}
-
-	for _, retryableErr := range retryableErrors {
-		if strings.Contains(errStr, retryableErr) {
-			return true
-		}
-	}
-
-	// Default to retryable for unknown errors
-	return true
 }
 
 // handleSubfinderTask processes subfinder tasks
@@ -203,7 +194,19 @@ func (h *TaskHandler) handleHttpxTask(ctx context.Context, result *models.TaskRe
 	return nil
 }
 
-// generateTaskID generates a unique task ID
-func generateTaskID() string {
-	return fmt.Sprintf("task_%d", time.Now().UnixNano())
+// sendCompletionNotification sends a completion notification to the Azure Function orchestrator
+func (h *TaskHandler) sendCompletionNotification(ctx context.Context, taskMsg *models.TaskMessage, result *models.TaskResult) error {
+	// Use ScanID as the instance ID for the durable function
+	instanceID := taskMsg.InstanceID
+	if instanceID == "" {
+		return fmt.Errorf("instance_id is required for notification")
+	}
+
+	// Map task names to tool names for the notification
+	toolName := string(taskMsg.Task)
+
+	gologger.Info().Msgf("Sending completion notification for task %s, domain %s, instance %s", toolName, taskMsg.Domain, instanceID)
+
+	// Send notification with retry logic
+	return h.notifier.NotifyCompletionWithRetry(ctx, instanceID, toolName, result)
 }

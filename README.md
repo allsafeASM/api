@@ -56,11 +56,44 @@ BLOB_STORAGE_CONNECTION_STRING=your_blob_storage_connection_string
 # Optional (with defaults)
 SERVICEBUS_NAMESPACE=asm-queue
 SERVICEBUS_QUEUE_NAME=tasks
-BLOB_CONTAINER_NAME=task-results
+BLOB_CONTAINER_NAME=scans
 LOG_LEVEL=info
 MAX_WORKERS=5
 POLL_INTERVAL=2
+SCANNER_TIMEOUT=3600
+LOCK_RENEWAL_INTERVAL=30
+MAX_LOCK_RENEWAL_TIME=3600
+
+# Notification settings (optional)
+ENABLE_NOTIFICATIONS=true
+DURABLE_API_ENDPOINT=https://your-function-app.azurewebsites.net/api/orchestrators
+DURABLE_API_KEY=your_function_key
+NOTIFICATION_TIMEOUT=30
 ```
+
+**Configuration Validation:**
+- Scanner timeout must be between 30 and 7200 seconds
+- Poll interval must be between 1 and 60 seconds
+- Lock renewal interval must be between 10 and 300 seconds
+- Max lock renewal time must be between 60 and 7200 seconds
+- All required connection strings must be provided
+
+## Message Lock Auto-Renewal
+
+The worker automatically renews message locks during long-running operations to prevent message expiration. This is especially important for security scanning tasks that may take several minutes to complete.
+
+**Configuration:**
+- `LOCK_RENEWAL_INTERVAL`: How often to renew the message lock (default: 30 seconds)
+- `MAX_LOCK_RENEWAL_TIME`: Maximum time to keep renewing locks (default: 1 hour)
+
+**How it works:**
+1. When a message is received, a background goroutine starts renewing the lock every `LOCK_RENEWAL_INTERVAL` seconds
+2. Lock renewal continues until either:
+   - The task completes successfully
+   - The task fails (retryable or non-retryable)
+   - `MAX_LOCK_RENEWAL_TIME` is reached
+   - The worker is shut down
+3. If lock renewal fails, the task is abandoned for retry
 
 ## Usage
 
@@ -93,8 +126,8 @@ az servicebus queue message send \
 
 Supported task types:
 - `subfinder` - Subdomain enumeration
-- `portscan` - Port scanning (TODO)
-- `httpx` - HTTP probing (TODO)
+- `portscan` - Port scanning (common ports)
+- `httpx` - HTTP probing (common endpoints)
 
 ## Task Processing Flow
 
@@ -103,6 +136,51 @@ Supported task types:
 3. **Execution**: Appropriate scanner is executed with timeout
 4. **Storage**: Results are stored in Azure Blob Storage
 5. **Completion**: Task is marked as completed or moved to DLQ
+
+## Task Completion Notifications
+
+The worker can send completion notifications to Azure Durable Functions when tasks finish processing. This enables integration with orchestrator workflows.
+
+### Configuration
+
+Enable notifications by setting the following environment variables:
+
+```bash
+ENABLE_NOTIFICATIONS=true
+DURABLE_API_ENDPOINT=https://your-function-app.azurewebsites.net/api/orchestrators
+DURABLE_API_KEY=your_function_key
+NOTIFICATION_TIMEOUT=30
+```
+
+### Notification Flow
+
+1. **Task Completion**: When a task completes (success or failure), the worker prepares a notification payload
+2. **HTTP Request**: Sends a POST request to the Azure Function endpoint with the task result
+3. **Event Name**: Uses the format `{toolName}_completed` (e.g., `subfinderCompleted`, `portscanCompleted`)
+4. **Instance ID**: Uses the `scan_id` from the task message as the durable function instance ID
+5. **Retry Logic**: Implements exponential backoff retry (3 attempts) for failed notifications
+
+### Notification Payload
+
+```json
+{
+  "scan_id": "task_1234567890",
+  "task": "subfinder",
+  "domain": "example.com",
+  "status": "completed",
+  "data": {
+    "subdomains": ["www.example.com", "api.example.com"],
+    "count": 2
+  },
+  "timestamp": "2024-01-15T10:30:45Z"
+}
+```
+
+### Error Handling
+
+- **Notification Failures**: If notification fails, the task is still marked as successful (notification errors don't fail the task)
+- **Missing Configuration**: If notification settings are missing, notifications are disabled gracefully
+- **Network Issues**: Implements retry logic with exponential backoff for transient failures
 
 ### Message Processing Strategy
 
@@ -124,7 +202,7 @@ The worker implements a robust message processing system:
 - **Non-retryable**: Invalid message format, unknown task types, permission errors
 
 #### **Configuration**
-- **Scanner Timeout**: `SCANNER_TIMEOUT=300` (5 minutes default)
+- **Scanner Timeout**: `SCANNER_TIMEOUT=3600` (1 hour default)
 - **Poll Interval**: `POLL_INTERVAL=2` (seconds between queue checks)
 - **Max Retries**: 3 attempts with exponential backoff (1s, 2s, 4s)
 
@@ -133,11 +211,13 @@ The worker implements a robust message processing system:
 Results are stored in Azure Blob Storage with the following structure:
 
 ```
-task-results/
-├── results/
+scans/
+├── domain-scan_id/
 │   ├── subfinder/
-│   │   ├── task_1234567890-2024-01-15-10-30-45.json
-│   │   └── ...
+│   │   ├── in/
+│   │   │   └── uuid.json
+│   │   └── out/
+│   │   │   └── uuid.json
 │   ├── portscan/
 │   └── httpx/
 ```
@@ -145,8 +225,8 @@ task-results/
 Each result file contains:
 ```json
 {
-  "task_id": "task_1234567890",
-  "task_type": "subfinder",
+  "scan_id": "task_1234567890",
+  "task": "subfinder",
   "domain": "example.com",
   "status": "completed",
   "data": {
