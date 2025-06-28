@@ -27,3 +27,5 @@ go.work.sum
 # Ignore build output
 /bin/
 
+# Ignore binary files
+api
