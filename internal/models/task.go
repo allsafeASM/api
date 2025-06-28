@@ -24,8 +24,8 @@ type Task string
 
 const (
 	TaskSubfinder Task = "subfinder"
-	TaskPortScan  Task = "portscan"
 	TaskHttpx     Task = "httpx"
+	TaskDNSX      Task = "dnsx"
 )
 
 // Task status

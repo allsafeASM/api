@@ -21,6 +21,9 @@ type AppConfig struct {
 	// Notification settings
 	EnableNotifications bool
 	NotificationTimeout int // seconds - timeout for notification requests
+	// Discord webhook settings
+	EnableDiscordNotifications bool
+	DiscordWebhookTimeout      int // seconds - timeout for Discord webhook requests
 }
 
 // Load loads configuration from environment variables
@@ -28,13 +31,15 @@ func Load() *Config {
 	return &Config{
 		Azure: LoadAzureConfig(),
 		App: AppConfig{
-			LogLevel:            getEnv("LOG_LEVEL", "info"),
-			PollInterval:        getEnvAsInt("POLL_INTERVAL", 2),
-			ScannerTimeout:      getEnvAsInt("SCANNER_TIMEOUT", 60*60),      // 1 hour
-			LockRenewalInterval: getEnvAsInt("LOCK_RENEWAL_INTERVAL", 30),   // 30 seconds
-			MaxLockRenewalTime:  getEnvAsInt("MAX_LOCK_RENEWAL_TIME", 3600), // 1 hour
-			EnableNotifications: getEnvAsBool("ENABLE_NOTIFICATIONS", true),
-			NotificationTimeout: getEnvAsInt("NOTIFICATION_TIMEOUT", 30), // 30 seconds
+			LogLevel:                   getEnv("LOG_LEVEL", "info"),
+			PollInterval:               getEnvAsInt("POLL_INTERVAL", 2),
+			ScannerTimeout:             getEnvAsInt("SCANNER_TIMEOUT", 60*60),      // 1 hour
+			LockRenewalInterval:        getEnvAsInt("LOCK_RENEWAL_INTERVAL", 30),   // 30 seconds
+			MaxLockRenewalTime:         getEnvAsInt("MAX_LOCK_RENEWAL_TIME", 3600), // 1 hour
+			EnableNotifications:        getEnvAsBool("ENABLE_NOTIFICATIONS", true),
+			NotificationTimeout:        getEnvAsInt("NOTIFICATION_TIMEOUT", 30), // 30 seconds
+			EnableDiscordNotifications: getEnvAsBool("ENABLE_DISCORD_NOTIFICATIONS", true),
+			DiscordWebhookTimeout:      getEnvAsInt("DISCORD_WEBHOOK_TIMEOUT", 30), // 30 seconds
 		},
 	}
 }

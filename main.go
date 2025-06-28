@@ -32,6 +32,7 @@ func main() {
 	gologger.Info().Msgf("  Blob Container: %s", cfg.Azure.BlobContainerName)
 	gologger.Info().Msgf("  Log Level: %s", cfg.App.LogLevel)
 	gologger.Info().Msgf("  Notifications Enabled: %t", cfg.App.EnableNotifications)
+	gologger.Info().Msgf("  Discord Notifications Enabled: %t", cfg.App.EnableDiscordNotifications)
 
 	// Create Azure clients
 	serviceBusClient, err := azure.NewServiceBusClient(
@@ -67,7 +68,23 @@ func main() {
 		}
 	}
 
-	taskHandler := handlers.NewTaskHandler(blobClient, scannerTimeout, notifier, cfg.App.EnableNotifications)
+	// Initialize Discord notification service if enabled
+	var discordNotifier *notification.DiscordNotifier
+	if cfg.App.EnableDiscordNotifications {
+		var err error
+		discordNotifier, err = notification.NewDiscordNotifier()
+		if err != nil {
+			gologger.Warning().Msgf("Failed to initialize Discord notification service: %v. Discord notifications will be disabled.", err)
+			cfg.App.EnableDiscordNotifications = false
+		} else if discordNotifier.IsEnabled() {
+			gologger.Info().Msg("Discord notification service initialized successfully")
+		} else {
+			gologger.Info().Msg("Discord webhook URL not provided, Discord notifications disabled")
+			cfg.App.EnableDiscordNotifications = false
+		}
+	}
+
+	taskHandler := handlers.NewTaskHandler(blobClient, scannerTimeout, notifier, discordNotifier, cfg.App.EnableNotifications, cfg.App.EnableDiscordNotifications)
 
 	// Create context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())

@@ -23,7 +23,6 @@ api/
 │   ├── portscanner.go
 │   └── httpx.go
 ├── main.go              # Main application (processes tasks from queue)
-├── Makefile             # Build and run commands
 └── go.mod
 ```
 
@@ -69,6 +68,11 @@ ENABLE_NOTIFICATIONS=true
 DURABLE_API_ENDPOINT=https://your-function-app.azurewebsites.net/api/orchestrators
 DURABLE_API_KEY=your_function_key
 NOTIFICATION_TIMEOUT=30
+
+# Discord webhook notifications (optional)
+ENABLE_DISCORD_NOTIFICATIONS=false
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/your-webhook-url
+DISCORD_WEBHOOK_TIMEOUT=30
 ```
 
 **Configuration Validation:**
@@ -103,12 +107,9 @@ The worker automatically renews message locks during long-running operations to 
 # Run directly
 go run main.go
 
-# Or use make
-make run
-
 # Build and run
-make build
-./bin/allsafe-asm
+go build
+./api
 ```
 
 ### Sending Tasks to Queue
@@ -182,6 +183,80 @@ NOTIFICATION_TIMEOUT=30
 - **Missing Configuration**: If notification settings are missing, notifications are disabled gracefully
 - **Network Issues**: Implements retry logic with exponential backoff for transient failures
 
+## Discord Webhook Notifications
+
+The worker can send real-time notifications to Discord for every step of task processing. This provides immediate visibility into the status of security scanning operations.
+
+### Configuration
+
+Enable Discord notifications by setting the following environment variables:
+
+```bash
+ENABLE_DISCORD_NOTIFICATIONS=true
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/your-webhook-url
+DISCORD_WEBHOOK_TIMEOUT=30
+```
+
+### Notification Steps
+
+The worker sends Discord notifications for the following steps:
+
+1. **🔄 Task Received** - When a new task is picked up from the queue
+2. **⚡ Task Started** - When task processing begins
+3. **✅ Task Completed** - When a task completes successfully
+4. **❌ Task Failed** - When a task fails with error details
+5. **💾 Result Stored** - When results are successfully stored in blob storage
+6. **📢 Notification Sent** - When Azure notification is sent to the orchestrator
+
+### Discord Embed Format
+
+Each notification includes a rich Discord embed with:
+
+- **Color-coded status**: Blue (info), Green (success), Red (error), Purple (processing)
+- **Task details**: Task type, domain, scan ID
+- **Results summary**: Count of findings when applicable
+- **Error information**: Detailed error messages for failures
+- **Timestamp**: When the event occurred
+- **Footer**: "AllSafe ASM Worker" branding
+
+### Example Discord Notifications
+
+#### Task Received
+```
+🔄 Task Received
+New task received for processing
+Task: subfinder | Domain: example.com | Scan ID: scan-123
+```
+
+#### Task Completed
+```
+✅ Task Completed
+Task completed successfully
+Task: subfinder | Domain: example.com | Scan ID: scan-123 | Results Count: 5
+```
+
+#### Task Failed
+```
+❌ Task Failed
+Task processing failed
+Task: subfinder | Domain: example.com | Scan ID: scan-123
+Error: DNS resolution failed for domain
+```
+
+### Error Handling
+
+- **Webhook Failures**: If Discord webhook fails, the task continues processing (webhook errors don't fail the task)
+- **Missing Configuration**: If Discord webhook URL is not provided, Discord notifications are disabled gracefully
+- **Network Issues**: Implements retry logic with exponential backoff for transient failures
+- **Rate Limiting**: Respects Discord's rate limits with built-in delays
+
+### Integration with Azure Notifications
+
+Discord notifications work alongside Azure notifications:
+- **Azure notifications**: Send completion events to orchestrator workflows
+- **Discord notifications**: Provide real-time visibility to operators
+- **Independent operation**: Each notification system can be enabled/disabled independently
+
 ### Message Processing Strategy
 
 The worker implements a robust message processing system:
@@ -218,7 +293,7 @@ scans/
 │   │   │   └── uuid.json
 │   │   └── out/
 │   │   │   └── uuid.json
-│   ├── portscan/
+│   │   ├── portscan/
 │   └── httpx/
 ```
 
@@ -255,19 +330,13 @@ Each result file contains:
 
 ```bash
 # Build application
-make build
-
-# Or manually
-go build -o bin/allsafe-asm main.go
+go build
 ```
 
 ## Docker
 
 ```bash
 # Build Docker image
-make docker-build
-
-# Or manually
 docker build -t allsafe-asm .
 ```
 
