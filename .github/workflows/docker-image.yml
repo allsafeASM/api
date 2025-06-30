@@ -22,7 +22,7 @@ jobs:
       
     # ADDED: This 'outputs' block makes the image name available to other jobs
     outputs:
-      image_tag: ${{ github.ref_name }}
+      image_tag: ${{ steps.meta.outputs.tags }}
       
     steps:
       - name: Checkout repository
@@ -45,20 +45,15 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            # We no longer need the SHA tag if we're not deploying it
-            # type=sha,prefix={{branch}}-
-
+            type=sha,prefix={{branch}}-
+            
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           platforms: linux/amd64
-          tags: ${{ github.ref_name }}
+          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
