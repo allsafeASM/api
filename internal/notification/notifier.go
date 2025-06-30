@@ -28,6 +28,7 @@ type NotificationPayload struct {
 	Data      map[string]interface{} `json:"data,omitempty"`
 	Error     string                 `json:"error,omitempty"`
 	Timestamp string                 `json:"timestamp"`
+	Duration  string                 `json:"duration,omitempty"`
 }
 
 // NewNotifier creates a new notifier instance

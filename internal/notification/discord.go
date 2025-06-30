@@ -171,6 +171,13 @@ func (d *DiscordNotifier) createPayload(step NotificationStep, taskMsg *models.T
 			{Name: "Scan ID", Value: taskMsg.ScanID, Inline: true},
 		}
 
+		// Add duration if available
+		if result != nil && result.Duration != "" {
+			embed.Fields = append(embed.Fields, DiscordEmbedField{
+				Name: "Duration", Value: result.Duration, Inline: true,
+			})
+		}
+
 		if result != nil && result.Data != nil {
 			if scannerResult, ok := result.Data.(models.ScannerResult); ok {
 				embed.Fields = append(embed.Fields, DiscordEmbedField{
@@ -188,6 +195,14 @@ func (d *DiscordNotifier) createPayload(step NotificationStep, taskMsg *models.T
 			{Name: "Domain", Value: taskMsg.Domain, Inline: true},
 			{Name: "Scan ID", Value: taskMsg.ScanID, Inline: true},
 		}
+
+		// Add duration if available
+		if result != nil && result.Duration != "" {
+			embed.Fields = append(embed.Fields, DiscordEmbedField{
+				Name: "Duration", Value: result.Duration, Inline: true,
+			})
+		}
+
 		if err != nil {
 			embed.Fields = append(embed.Fields, DiscordEmbedField{
 				Name: "Error", Value: err.Error(), Inline: false,
@@ -204,6 +219,13 @@ func (d *DiscordNotifier) createPayload(step NotificationStep, taskMsg *models.T
 			{Name: "Scan ID", Value: taskMsg.ScanID, Inline: true},
 		}
 
+		// Add duration if available
+		if result != nil && result.Duration != "" {
+			embed.Fields = append(embed.Fields, DiscordEmbedField{
+				Name: "Duration", Value: result.Duration, Inline: true,
+			})
+		}
+
 	case StepNotificationSent:
 		embed.Title = "📢 Notification Sent"
 		embed.Description = "Azure notification sent successfully"
@@ -212,6 +234,13 @@ func (d *DiscordNotifier) createPayload(step NotificationStep, taskMsg *models.T
 			{Name: "Task", Value: string(taskMsg.Task), Inline: true},
 			{Name: "Domain", Value: taskMsg.Domain, Inline: true},
 			{Name: "Scan ID", Value: taskMsg.ScanID, Inline: true},
+		}
+
+		// Add duration if available
+		if result != nil && result.Duration != "" {
+			embed.Fields = append(embed.Fields, DiscordEmbedField{
+				Name: "Duration", Value: result.Duration, Inline: true,
+			})
 		}
 	}
 

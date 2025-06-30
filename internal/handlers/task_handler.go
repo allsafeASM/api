@@ -43,6 +43,9 @@ func NewTaskHandler(blobClient *azure.BlobStorageClient, scannerTimeout time.Dur
 func (h *TaskHandler) HandleTask(ctx context.Context, taskMsg *models.TaskMessage) *models.MessageProcessingResult {
 	gologger.Info().Msgf("Processing task: %s for domain: %s", taskMsg.Task, taskMsg.Domain)
 
+	// Track start time for duration calculation
+	startTime := time.Now()
+
 	// Send initial Discord notification
 	h.sendDiscordNotification(ctx, taskMsg, nil, nil, notification.StepTaskReceived)
 
@@ -58,8 +61,14 @@ func (h *TaskHandler) HandleTask(ctx context.Context, taskMsg *models.TaskMessag
 
 	// Process the task
 	if processingResult := h.processTask(ctx, taskMsg, result); !processingResult.Success {
+		// Set duration even for failed tasks
+		result.Duration = time.Since(startTime).String()
+		gologger.Error().Msgf("Task %s for domain %s failed after %s", taskMsg.Task, taskMsg.Domain, result.Duration)
 		return processingResult
 	}
+
+	// Set duration for successful tasks
+	result.Duration = time.Since(startTime).String()
 
 	// Store result and send notifications
 	return h.finalizeTask(ctx, taskMsg, result)
@@ -175,6 +184,9 @@ func (h *TaskHandler) processTask(ctx context.Context, taskMsg *models.TaskMessa
 
 // finalizeTask stores the result and sends completion notifications
 func (h *TaskHandler) finalizeTask(ctx context.Context, taskMsg *models.TaskMessage, result *models.TaskResult) *models.MessageProcessingResult {
+	// Log the task duration
+	gologger.Info().Msgf("Task %s for domain %s completed in %s", taskMsg.Task, taskMsg.Domain, result.Duration)
+
 	// For subfinder, only store as text file, not JSON
 	if result.Task == models.TaskSubfinder {
 		if subfinderResult, ok := result.Data.(models.SubfinderResult); ok {

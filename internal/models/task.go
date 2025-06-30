@@ -18,6 +18,7 @@ type TaskResult struct {
 	Data      any        `json:"data,omitempty"`
 	Error     string     `json:"error,omitempty"`
 	Timestamp string     `json:"timestamp"`
+	Duration  string     `json:"duration,omitempty"` // Duration of the task execution
 }
 
 // Task types
