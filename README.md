@@ -340,6 +340,64 @@ go build
 docker build -t allsafe-asm .
 ```
 
+## Deployment
+
+### GitHub Actions - Docker Hub
+
+This repository includes a GitHub Actions workflow that automatically builds and pushes Docker images to Docker Hub.
+
+#### Setup
+
+1. **Create Docker Hub Account**: If you don't have one, create an account at [Docker Hub](https://hub.docker.com/)
+
+2. **Create Access Token**: 
+   - Go to Docker Hub → Account Settings → Security
+   - Create a new access token with read/write permissions
+
+3. **Add GitHub Secrets**:
+   - Go to your GitHub repository → Settings → Secrets and variables → Actions
+   - Add the following secrets:
+     - `DOCKERHUB_USERNAME`: Your Docker Hub username
+     - `DOCKERHUB_TOKEN`: Your Docker Hub access token
+
+#### Workflow Triggers
+
+The workflow runs on:
+- **Push to main/master branch**: Builds and pushes with branch tag
+- **Pull requests**: Builds only (no push) for testing
+- **Git tags**: Builds and pushes with version tags (e.g., `v1.0.0`)
+
+#### Image Tags
+
+The workflow automatically creates the following tags:
+- `latest` (for main/master branch)
+- `{branch-name}` (e.g., `main`, `develop`)
+- `{version}` (for git tags, e.g., `v1.0.0`)
+- `{major}.{minor}` (for git tags, e.g., `1.0`)
+- `{branch}-{sha}` (e.g., `main-abc123`)
+
+#### Usage
+
+After setup, your Docker images will be available at:
+```
+docker.io/{your-username}/{repository-name}:{tag}
+```
+
+Example:
+```bash
+# Pull the latest image
+docker pull yourusername/allsafe-asm:latest
+
+# Pull a specific version
+docker pull yourusername/allsafe-asm:v1.0.0
+
+# Run the container
+docker run -d \
+  -e SERVICEBUS_CONNECTION_STRING="your_connection_string" \
+  -e BLOB_STORAGE_CONNECTION_STRING="your_connection_string" \
+  yourusername/allsafe-asm:latest
+```
+
 ## Monitoring
 
 - Monitor Azure Service Bus queue metrics

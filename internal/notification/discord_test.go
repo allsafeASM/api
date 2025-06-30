@@ -45,15 +45,18 @@ func TestDiscordNotifier_CreatePayload(t *testing.T) {
 		InstanceID: "test-instance-456",
 	}
 
+	subfinderResult := models.SubfinderResult{
+		Domain:     "example.com",
+		Subdomains: []string{"www.example.com", "api.example.com", "mail.example.com", "ftp.example.com", "admin.example.com"},
+	}
+
 	result := &models.TaskResult{
 		ScanID:    "test-scan-123",
 		Task:      "subfinder",
 		Domain:    "example.com",
 		Status:    "completed",
 		Timestamp: time.Now().Format(time.RFC3339),
-		Data: map[string]interface{}{
-			"count": 5,
-		},
+		Data:      subfinderResult,
 	}
 
 	// Test task received payload
@@ -110,23 +113,23 @@ func TestDiscordNotifier_NotifyMethods(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Test all notification methods (should not error when disabled)
-	methods := []struct {
-		name string
-		fn   func() error
+	// Test all notification steps (should not error when disabled)
+	steps := []struct {
+		name NotificationStep
+		err  error
 	}{
-		{"NotifyTaskReceived", func() error { return notifier.NotifyTaskReceived(ctx, taskMsg) }},
-		{"NotifyTaskStarted", func() error { return notifier.NotifyTaskStarted(ctx, taskMsg) }},
-		{"NotifyTaskCompleted", func() error { return notifier.NotifyTaskCompleted(ctx, taskMsg, result) }},
-		{"NotifyTaskFailed", func() error { return notifier.NotifyTaskFailed(ctx, taskMsg, fmt.Errorf("test")) }},
-		{"NotifyResultStored", func() error { return notifier.NotifyResultStored(ctx, taskMsg, result) }},
-		{"NotifyNotificationSent", func() error { return notifier.NotifyNotificationSent(ctx, taskMsg, result) }},
+		{StepTaskReceived, nil},
+		{StepTaskStarted, nil},
+		{StepTaskCompleted, nil},
+		{StepTaskFailed, fmt.Errorf("test")},
+		{StepResultStored, nil},
+		{StepNotificationSent, nil},
 	}
 
-	for _, method := range methods {
-		t.Run(method.name, func(t *testing.T) {
-			if err := method.fn(); err != nil {
-				t.Errorf("Expected no error for %s when disabled, got: %v", method.name, err)
+	for _, step := range steps {
+		t.Run(string(step.name), func(t *testing.T) {
+			if err := notifier.NotifyStep(ctx, step.name, taskMsg, result, step.err); err != nil {
+				t.Errorf("Expected no error for %s when disabled, got: %v", step.name, err)
 			}
 		})
 	}

@@ -77,26 +77,46 @@ const (
 	ColorPurple  = 0x9b59b6 // Purple
 )
 
-// NewDiscordNotifier creates a new Discord notification service
+// NewDiscordNotifier creates a new Discord notifier
 func NewDiscordNotifier() (*DiscordNotifier, error) {
 	webhookURL := os.Getenv("DISCORD_WEBHOOK_URL")
-
 	if webhookURL == "" {
 		return &DiscordNotifier{
+			webhookURL: "",
+			httpClient: &http.Client{
+				Timeout: 30 * time.Second,
+			},
 			enabled: false,
 		}, nil
 	}
 
-	// Create HTTP client with timeout
-	httpClient := &http.Client{
-		Timeout: 30 * time.Second,
-	}
-
 	return &DiscordNotifier{
 		webhookURL: webhookURL,
-		httpClient: httpClient,
-		enabled:    true,
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+		enabled: true,
 	}, nil
+}
+
+// NewConfiguredDiscordNotifier creates a Discord notifier based on configuration
+func NewConfiguredDiscordNotifier(enableDiscordNotifications bool) (*DiscordNotifier, error) {
+	if !enableDiscordNotifications {
+		return nil, nil // Not an error, just disabled
+	}
+
+	discordNotifier, err := NewDiscordNotifier()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize Discord notification service: %w", err)
+	}
+
+	if !discordNotifier.IsEnabled() {
+		gologger.Info().Msg("Discord webhook URL not provided, Discord notifications disabled")
+		return nil, nil // Not an error, just disabled
+	}
+
+	gologger.Info().Msg("Discord notification service initialized successfully")
+	return discordNotifier, nil
 }
 
 // IsEnabled returns whether Discord notifications are enabled
@@ -112,36 +132,6 @@ func (d *DiscordNotifier) NotifyStep(ctx context.Context, step NotificationStep,
 
 	payload := d.createPayload(step, taskMsg, result, err)
 	return d.sendWebhook(ctx, payload)
-}
-
-// NotifyTaskReceived sends notification when a task is received
-func (d *DiscordNotifier) NotifyTaskReceived(ctx context.Context, taskMsg *models.TaskMessage) error {
-	return d.NotifyStep(ctx, StepTaskReceived, taskMsg, nil, nil)
-}
-
-// NotifyTaskStarted sends notification when a task starts processing
-func (d *DiscordNotifier) NotifyTaskStarted(ctx context.Context, taskMsg *models.TaskMessage) error {
-	return d.NotifyStep(ctx, StepTaskStarted, taskMsg, nil, nil)
-}
-
-// NotifyTaskCompleted sends notification when a task completes successfully
-func (d *DiscordNotifier) NotifyTaskCompleted(ctx context.Context, taskMsg *models.TaskMessage, result *models.TaskResult) error {
-	return d.NotifyStep(ctx, StepTaskCompleted, taskMsg, result, nil)
-}
-
-// NotifyTaskFailed sends notification when a task fails
-func (d *DiscordNotifier) NotifyTaskFailed(ctx context.Context, taskMsg *models.TaskMessage, err error) error {
-	return d.NotifyStep(ctx, StepTaskFailed, taskMsg, nil, err)
-}
-
-// NotifyResultStored sends notification when result is stored successfully
-func (d *DiscordNotifier) NotifyResultStored(ctx context.Context, taskMsg *models.TaskMessage, result *models.TaskResult) error {
-	return d.NotifyStep(ctx, StepResultStored, taskMsg, result, nil)
-}
-
-// NotifyNotificationSent sends notification when Azure notification is sent
-func (d *DiscordNotifier) NotifyNotificationSent(ctx context.Context, taskMsg *models.TaskMessage, result *models.TaskResult) error {
-	return d.NotifyStep(ctx, StepNotificationSent, taskMsg, result, nil)
 }
 
 // createPayload creates a Discord webhook payload based on the step and data
@@ -182,12 +172,10 @@ func (d *DiscordNotifier) createPayload(step NotificationStep, taskMsg *models.T
 		}
 
 		if result != nil && result.Data != nil {
-			if dataMap, ok := result.Data.(map[string]interface{}); ok {
-				if count, ok := dataMap["count"].(int); ok {
-					embed.Fields = append(embed.Fields, DiscordEmbedField{
-						Name: "Results Count", Value: fmt.Sprintf("%d", count), Inline: true,
-					})
-				}
+			if scannerResult, ok := result.Data.(models.ScannerResult); ok {
+				embed.Fields = append(embed.Fields, DiscordEmbedField{
+					Name: "Results Count", Value: fmt.Sprintf("%d", scannerResult.GetCount()), Inline: true,
+				})
 			}
 		}
 
@@ -232,9 +220,7 @@ func (d *DiscordNotifier) createPayload(step NotificationStep, taskMsg *models.T
 	}
 
 	return DiscordWebhookPayload{
-		Username:  "AllSafe ASM Bot",
-		AvatarURL: "https://i.imgur.com/oBPXx0D.png",
-		Embeds:    []DiscordEmbed{embed},
+		Embeds: []DiscordEmbed{embed},
 	}
 }
 
@@ -264,39 +250,4 @@ func (d *DiscordNotifier) sendWebhook(ctx context.Context, payload DiscordWebhoo
 
 	gologger.Debug().Msgf("Discord webhook sent successfully. Status: %d", resp.StatusCode)
 	return nil
-}
-
-// SendWebhookWithRetry sends a webhook with retry logic
-func (d *DiscordNotifier) SendWebhookWithRetry(ctx context.Context, payload DiscordWebhookPayload) error {
-	maxRetries := 3
-	baseDelay := 1 * time.Second
-
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		err := d.sendWebhook(ctx, payload)
-		if err == nil {
-			return nil
-		}
-
-		if attempt == maxRetries {
-			return fmt.Errorf("failed to send Discord webhook after %d attempts: %w", maxRetries+1, err)
-		}
-
-		delay := time.Duration(baseDelay.Nanoseconds() * int64(1<<attempt))
-		gologger.Warning().Msgf("Discord webhook failed (attempt %d/%d), retrying in %v: %v", attempt+1, maxRetries+1, delay, err)
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(delay):
-			continue
-		}
-	}
-
-	return fmt.Errorf("max retries exceeded for Discord webhook")
 }

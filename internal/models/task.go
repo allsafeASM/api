@@ -2,10 +2,12 @@ package models
 
 // TaskMessage represents the structure of messages in the queue
 type TaskMessage struct {
-	Task       Task   `json:"task"`
-	ScanID     string `json:"scan_id"`
-	Domain     string `json:"domain"`
-	InstanceID string `json:"instance_id"`
+	Task              Task   `json:"task"`
+	ScanID            string `json:"scan_id"`
+	Domain            string `json:"domain"`
+	InstanceID        string `json:"instance_id"`
+	FilePath          string `json:"file_path,omitempty"`           // Optional file path for tools that need file input
+	HostsFileLocation string `json:"hosts_file_location,omitempty"` // Alternative field name for hosts file location
 }
 
 // TaskResult represents the result of a completed task
@@ -23,9 +25,9 @@ type TaskResult struct {
 type Task string
 
 const (
-	TaskSubfinder Task = "subfinder"
-	TaskHttpx     Task = "httpx"
-	TaskDNSX      Task = "dnsx"
+	TaskSubfinder  Task = "subfinder"
+	TaskHttpx      Task = "httpx"
+	TaskDNSResolve Task = "dns_resolve"
 )
 
 // Task status

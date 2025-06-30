@@ -43,15 +43,17 @@ func TestNewNotifier(t *testing.T) {
 }
 
 func TestNotificationPayload(t *testing.T) {
+	subfinderResult := models.SubfinderResult{
+		Domain:     "example.com",
+		Subdomains: []string{"www.example.com", "api.example.com"},
+	}
+
 	result := &models.TaskResult{
 		ScanID: "test-scan-123",
 		Task:   models.TaskSubfinder,
 		Domain: "example.com",
 		Status: models.TaskStatusCompleted,
-		Data: map[string]interface{}{
-			"subdomains": []string{"www.example.com", "api.example.com"},
-			"count":      2,
-		},
+		Data:   subfinderResult,
 	}
 
 	payload := NotificationPayload{
@@ -61,8 +63,11 @@ func TestNotificationPayload(t *testing.T) {
 		Status: string(result.Status),
 	}
 
-	if dataMap, ok := result.Data.(map[string]interface{}); ok {
-		payload.Data = dataMap
+	// Convert the result to a map for the payload
+	if scannerResult, ok := result.Data.(models.ScannerResult); ok {
+		payload.Data = map[string]interface{}{
+			"count": scannerResult.GetCount(),
+		}
 	}
 
 	if payload.ScanID != "test-scan-123" {

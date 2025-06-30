@@ -1,8 +1,10 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 // Config holds all configuration for the application
@@ -30,17 +32,22 @@ type AppConfig struct {
 func Load() *Config {
 	return &Config{
 		Azure: LoadAzureConfig(),
-		App: AppConfig{
-			LogLevel:                   getEnv("LOG_LEVEL", "info"),
-			PollInterval:               getEnvAsInt("POLL_INTERVAL", 2),
-			ScannerTimeout:             getEnvAsInt("SCANNER_TIMEOUT", 60*60),      // 1 hour
-			LockRenewalInterval:        getEnvAsInt("LOCK_RENEWAL_INTERVAL", 30),   // 30 seconds
-			MaxLockRenewalTime:         getEnvAsInt("MAX_LOCK_RENEWAL_TIME", 3600), // 1 hour
-			EnableNotifications:        getEnvAsBool("ENABLE_NOTIFICATIONS", true),
-			NotificationTimeout:        getEnvAsInt("NOTIFICATION_TIMEOUT", 30), // 30 seconds
-			EnableDiscordNotifications: getEnvAsBool("ENABLE_DISCORD_NOTIFICATIONS", true),
-			DiscordWebhookTimeout:      getEnvAsInt("DISCORD_WEBHOOK_TIMEOUT", 30), // 30 seconds
-		},
+		App:   LoadAppConfig(),
+	}
+}
+
+// LoadAppConfig loads application-specific configuration
+func LoadAppConfig() AppConfig {
+	return AppConfig{
+		LogLevel:                   getEnv("LOG_LEVEL", "info"),
+		PollInterval:               getEnvAsInt("POLL_INTERVAL", 10),
+		ScannerTimeout:             getEnvAsInt("SCANNER_TIMEOUT", 60*60),      // 1 hour
+		LockRenewalInterval:        getEnvAsInt("LOCK_RENEWAL_INTERVAL", 30),   // 30 seconds
+		MaxLockRenewalTime:         getEnvAsInt("MAX_LOCK_RENEWAL_TIME", 3600), // 1 hour
+		EnableNotifications:        getEnvAsBool("ENABLE_NOTIFICATIONS", true),
+		NotificationTimeout:        getEnvAsInt("NOTIFICATION_TIMEOUT", 30), // 30 seconds
+		EnableDiscordNotifications: getEnvAsBool("ENABLE_DISCORD_NOTIFICATIONS", true),
+		DiscordWebhookTimeout:      getEnvAsInt("DISCORD_WEBHOOK_TIMEOUT", 30), // 30 seconds
 	}
 }
 
@@ -50,25 +57,67 @@ func (c *Config) Validate() error {
 		return err
 	}
 
-	// Validate timeout values
-	if c.App.ScannerTimeout < 30 || c.App.ScannerTimeout > 7200 {
-		return &ConfigError{Field: "SCANNER_TIMEOUT", Message: "Scanner timeout must be between 30 and 7200 seconds"}
-	}
-
-	if c.App.PollInterval < 1 || c.App.PollInterval > 60 {
-		return &ConfigError{Field: "POLL_INTERVAL", Message: "Poll interval must be between 1 and 60 seconds"}
-	}
-
-	// Validate lock renewal values
-	if c.App.LockRenewalInterval < 10 || c.App.LockRenewalInterval > 300 {
-		return &ConfigError{Field: "LOCK_RENEWAL_INTERVAL", Message: "Lock renewal interval must be between 10 and 300 seconds"}
-	}
-
-	if c.App.MaxLockRenewalTime < 60 || c.App.MaxLockRenewalTime > 7200 {
-		return &ConfigError{Field: "MAX_LOCK_RENEWAL_TIME", Message: "Max lock renewal time must be between 60 and 7200 seconds"}
+	if err := c.App.ValidateAppConfig(); err != nil {
+		return err
 	}
 
 	return nil
+}
+
+// ValidateAppConfig validates application-specific configuration
+func (c *AppConfig) ValidateAppConfig() error {
+	// Define validation rules
+	validations := []struct {
+		field     string
+		value     int
+		min, max  int
+		fieldName string
+	}{
+		{"SCANNER_TIMEOUT", c.ScannerTimeout, 30, 7200, "Scanner timeout"},
+		{"POLL_INTERVAL", c.PollInterval, 1, 60, "Poll interval"},
+		{"LOCK_RENEWAL_INTERVAL", c.LockRenewalInterval, 10, 300, "Lock renewal interval"},
+		{"MAX_LOCK_RENEWAL_TIME", c.MaxLockRenewalTime, 60, 7200, "Max lock renewal time"},
+	}
+
+	for _, v := range validations {
+		if err := validateRange(v.field, v.value, v.min, v.max, v.fieldName); err != nil {
+			return err
+		}
+	}
+
+	if err := validateLogLevel(c.LogLevel); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateRange validates that a value is within the specified range
+func validateRange(field string, value, min, max int, fieldName string) error {
+	if value < min || value > max {
+		return &ConfigError{
+			Field:   field,
+			Message: fmt.Sprintf("%s must be between %d and %d seconds", fieldName, min, max),
+		}
+	}
+	return nil
+}
+
+// validateLogLevel validates that the log level is valid
+func validateLogLevel(logLevel string) error {
+	validLevels := []string{"debug", "info", "warning", "warn", "error", "fatal"}
+	logLevelLower := strings.ToLower(logLevel)
+
+	for _, valid := range validLevels {
+		if logLevelLower == valid {
+			return nil
+		}
+	}
+
+	return &ConfigError{
+		Field:   "LOG_LEVEL",
+		Message: fmt.Sprintf("Invalid log level '%s'. Valid levels are: %s", logLevel, strings.Join(validLevels, ", ")),
+	}
 }
 
 // ConfigError represents a configuration error

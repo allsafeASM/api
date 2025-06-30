@@ -12,7 +12,7 @@ import (
 	"github.com/projectdiscovery/gologger"
 )
 
-// Notifier handles sending completion notifications to Azure Functions
+// Notifier handles Azure Function notifications
 type Notifier struct {
 	durableBaseURL string
 	durableKey     string
@@ -30,7 +30,7 @@ type NotificationPayload struct {
 	Timestamp string                 `json:"timestamp"`
 }
 
-// NewNotifier creates a new notification service
+// NewNotifier creates a new notifier instance
 func NewNotifier() (*Notifier, error) {
 	durableBaseURL := os.Getenv("DURABLE_API_ENDPOINT")
 	durableKey := os.Getenv("DURABLE_API_KEY")
@@ -42,20 +42,36 @@ func NewNotifier() (*Notifier, error) {
 		return nil, fmt.Errorf("DURABLE_API_KEY environment variable is required")
 	}
 
-	// Create HTTP client with timeout
-	httpClient := &http.Client{
-		Timeout: 30 * time.Second,
-	}
-
 	return &Notifier{
 		durableBaseURL: durableBaseURL,
 		durableKey:     durableKey,
-		httpClient:     httpClient,
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
 	}, nil
 }
 
-// NotifyCompletion sends a completion event to the Azure Durable Function orchestrator
-func (n *Notifier) NotifyCompletion(ctx context.Context, instanceID string, toolName string) error {
+// NewConfiguredNotifier creates a notifier based on configuration
+func NewConfiguredNotifier(enableNotifications bool) (*Notifier, error) {
+	if !enableNotifications {
+		return nil, nil // Not an error, just disabled
+	}
+
+	notifier, err := NewNotifier()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize notification service: %w", err)
+	}
+
+	gologger.Info().Msg("Notification service initialized successfully")
+	return notifier, nil
+}
+
+// NotifyCompletion sends a completion notification to the Azure Function orchestrator
+func (n *Notifier) NotifyCompletion(ctx context.Context, instanceID string, toolName string, result *models.TaskResult) error {
+	if n == nil {
+		return nil // Notifications disabled
+	}
+
 	eventName := fmt.Sprintf("%s_completed", toolName)
 
 	// Construct the notification URL
@@ -90,32 +106,27 @@ func (n *Notifier) NotifyCompletion(ctx context.Context, instanceID string, tool
 
 // NotifyCompletionWithRetry sends a completion notification with retry logic
 func (n *Notifier) NotifyCompletionWithRetry(ctx context.Context, instanceID string, toolName string, result *models.TaskResult) error {
+	if n == nil {
+		return nil // Notifications disabled
+	}
+
 	maxRetries := 3
 	baseDelay := 1 * time.Second
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		// Check if context is cancelled
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		err := n.NotifyCompletion(ctx, instanceID, toolName)
+		err := n.NotifyCompletion(ctx, instanceID, toolName, result)
 		if err == nil {
 			return nil
 		}
 
-		// If this is the last attempt, return the error
 		if attempt == maxRetries {
-			return fmt.Errorf("failed to send notification after %d attempts: %w", maxRetries+1, err)
+			return fmt.Errorf("failed to send notification after %d attempts: %w", maxRetries, err)
 		}
 
 		// Calculate exponential backoff delay
 		delay := time.Duration(baseDelay.Nanoseconds() * int64(1<<attempt))
 		gologger.Warning().Msgf("Notification failed (attempt %d/%d), retrying in %v: %v", attempt+1, maxRetries+1, delay, err)
 
-		// Wait before retry
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -124,5 +135,5 @@ func (n *Notifier) NotifyCompletionWithRetry(ctx context.Context, instanceID str
 		}
 	}
 
-	return fmt.Errorf("max retries exceeded for notification")
+	return fmt.Errorf("max retries exceeded")
 }

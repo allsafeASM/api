@@ -6,30 +6,29 @@
 README.md
 *.md
 
-# Build artifacts
-bin/
-api
-
-# IDE files
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS files
+# OS
 .DS_Store
 Thumbs.db
 
-# Logs
-*.log
+# Build artifacts
+api
+*.exe
+*.dll
+*.so
+*.dylib
 
 # Test files
 *_test.go
-test/
+testdata/
 
-# Docker
-Dockerfile
-.dockerignore
+# Logs
+*.log
 
 # Temporary files
 *.tmp

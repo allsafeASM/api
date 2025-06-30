@@ -6,37 +6,36 @@ import (
 	"time"
 
 	"github.com/allsafeASM/api/internal/azure"
-	"github.com/allsafeASM/api/internal/errors"
+	"github.com/allsafeASM/api/internal/common"
 	"github.com/allsafeASM/api/internal/models"
 	"github.com/allsafeASM/api/internal/notification"
+	"github.com/allsafeASM/api/internal/scanners"
+	"github.com/allsafeASM/api/internal/utils"
 	"github.com/allsafeASM/api/internal/validation"
-	"github.com/allsafeASM/api/scanners"
 	"github.com/projectdiscovery/gologger"
 )
 
 // TaskHandler handles task processing and result storage
 type TaskHandler struct {
-	blobClient                 *azure.BlobStorageClient
-	scannerTimeout             time.Duration
-	domainValidator            *validation.DomainValidator
-	errorClassifier            *errors.ErrorClassifier
-	notifier                   *notification.Notifier
-	discordNotifier            *notification.DiscordNotifier
-	enableNotifications        bool
-	enableDiscordNotifications bool
+	blobClient      *azure.BlobStorageClient
+	scannerTimeout  time.Duration
+	validator       *validation.Validator
+	errorClassifier *common.ErrorClassifier
+	scannerFactory  *scanners.ScannerFactory
+	notifier        *notification.Notifier
+	discordNotifier *notification.DiscordNotifier
 }
 
 // NewTaskHandler creates a new task handler
-func NewTaskHandler(blobClient *azure.BlobStorageClient, scannerTimeout time.Duration, notifier *notification.Notifier, discordNotifier *notification.DiscordNotifier, enableNotifications bool, enableDiscordNotifications bool) *TaskHandler {
+func NewTaskHandler(blobClient *azure.BlobStorageClient, scannerTimeout time.Duration, notifier *notification.Notifier, discordNotifier *notification.DiscordNotifier) *TaskHandler {
 	return &TaskHandler{
-		blobClient:                 blobClient,
-		scannerTimeout:             scannerTimeout,
-		domainValidator:            validation.NewDomainValidator(),
-		errorClassifier:            errors.NewErrorClassifier(),
-		notifier:                   notifier,
-		discordNotifier:            discordNotifier,
-		enableNotifications:        enableNotifications,
-		enableDiscordNotifications: enableDiscordNotifications,
+		blobClient:      blobClient,
+		scannerTimeout:  scannerTimeout,
+		validator:       validation.NewValidator(),
+		errorClassifier: common.NewErrorClassifier(),
+		scannerFactory:  scanners.NewScannerFactoryWithBlobClient(blobClient),
+		notifier:        notifier,
+		discordNotifier: discordNotifier,
 	}
 }
 
@@ -44,231 +43,199 @@ func NewTaskHandler(blobClient *azure.BlobStorageClient, scannerTimeout time.Dur
 func (h *TaskHandler) HandleTask(ctx context.Context, taskMsg *models.TaskMessage) *models.MessageProcessingResult {
 	gologger.Info().Msgf("Processing task: %s for domain: %s", taskMsg.Task, taskMsg.Domain)
 
-	// Send Discord notification for task received
-	if h.enableDiscordNotifications && h.discordNotifier != nil {
-		if err := h.discordNotifier.NotifyTaskReceived(ctx, taskMsg); err != nil {
-			gologger.Warning().Msgf("Failed to send Discord notification for task received: %v", err)
-		}
-	}
+	// Send initial Discord notification
+	h.sendDiscordNotification(ctx, taskMsg, nil, nil, notification.StepTaskReceived)
 
 	// Validate task message
-	if taskMsg.Domain == "" {
-		err := fmt.Errorf("domain is required for task processing")
-		gologger.Error().Msgf("Task validation failed: %v", err)
-
-		// Send Discord notification for task failed
-		if h.enableDiscordNotifications && h.discordNotifier != nil {
-			if notifyErr := h.discordNotifier.NotifyTaskFailed(ctx, taskMsg, err); notifyErr != nil {
-				gologger.Warning().Msgf("Failed to send Discord notification for task failed: %v", notifyErr)
-			}
-		}
-
-		return &models.MessageProcessingResult{
-			Success:   false,
-			Error:     err,
-			Retryable: false,
-		}
+	if validationResult := h.validateTaskMessage(taskMsg); !validationResult.Success {
+		h.sendDiscordNotification(ctx, taskMsg, nil, validationResult.Error, notification.StepTaskFailed)
+		return validationResult
 	}
 
-	// Validate domain format (basic validation)
-	if !h.domainValidator.IsValidDomain(taskMsg.Domain) {
-		err := fmt.Errorf("invalid domain format: %s", taskMsg.Domain)
-		gologger.Error().Msgf("Task validation failed: %v", err)
+	// Create and process task result
+	result := h.createTaskResult(taskMsg)
+	h.sendDiscordNotification(ctx, taskMsg, result, nil, notification.StepTaskStarted)
 
-		// Send Discord notification for task failed
-		if h.enableDiscordNotifications && h.discordNotifier != nil {
-			if notifyErr := h.discordNotifier.NotifyTaskFailed(ctx, taskMsg, err); notifyErr != nil {
-				gologger.Warning().Msgf("Failed to send Discord notification for task failed: %v", notifyErr)
-			}
-		}
-
-		return &models.MessageProcessingResult{
-			Success:   false,
-			Error:     err,
-			Retryable: false,
-		}
+	// Process the task
+	if processingResult := h.processTask(ctx, taskMsg, result); !processingResult.Success {
+		return processingResult
 	}
 
-	// Create task result
-	result := &models.TaskResult{
+	// Store result and send notifications
+	return h.finalizeTask(ctx, taskMsg, result)
+}
+
+// validateTaskMessage validates the task message and returns appropriate result
+func (h *TaskHandler) validateTaskMessage(taskMsg *models.TaskMessage) *models.MessageProcessingResult {
+	if err := h.validator.ValidateTaskMessage(taskMsg); err != nil {
+		return h.createFailureResult(err, false)
+	}
+
+	return &models.MessageProcessingResult{Success: true}
+}
+
+// createTaskResult creates a new task result with initial status
+func (h *TaskHandler) createTaskResult(taskMsg *models.TaskMessage) *models.TaskResult {
+	return &models.TaskResult{
 		ScanID:    taskMsg.ScanID,
 		Task:      models.Task(taskMsg.Task),
 		Domain:    taskMsg.Domain,
 		Status:    models.TaskStatusRunning,
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
+}
 
-	// Send Discord notification for task started
-	if h.enableDiscordNotifications && h.discordNotifier != nil {
-		if err := h.discordNotifier.NotifyTaskStarted(ctx, taskMsg); err != nil {
-			gologger.Warning().Msgf("Failed to send Discord notification for task started: %v", err)
-		}
-	}
-
-	// Create context with timeout for scanner operations
+// processTask executes the task based on its type
+func (h *TaskHandler) processTask(ctx context.Context, taskMsg *models.TaskMessage, result *models.TaskResult) *models.MessageProcessingResult {
 	scannerCtx, cancel := context.WithTimeout(ctx, h.scannerTimeout)
 	defer cancel()
 
-	// Process the task based on type
-	var err error
-	switch taskMsg.Task {
-	case models.TaskSubfinder:
-		err = h.handleSubfinderTask(scannerCtx, result)
-	case models.TaskHttpx:
-		err = h.handleHttpxTask(scannerCtx, result)
-	case models.TaskDNSX:
-		err = h.handleDNSXTask(scannerCtx, result)
-	default: // Assume it's subfinder
-		err = h.handleSubfinderTask(scannerCtx, result)
+	scanner, err := h.scannerFactory.GetScanner(models.Task(taskMsg.Task))
+	if err != nil {
+		// Fallback to subfinder if scanner not found
+		gologger.Warning().Msgf("Scanner not found for task type %s, falling back to subfinder", taskMsg.Task)
+		scanner, _ = h.scannerFactory.GetScanner(models.TaskSubfinder)
 	}
 
-	// Update result status
+	// Create appropriate input structure based on scanner type
+	var scannerInput models.ScannerInput
+	switch models.Task(taskMsg.Task) {
+	case models.TaskSubfinder:
+		scannerInput = models.SubfinderInput{Domain: result.Domain}
+	case models.TaskHttpx:
+		scannerInput = models.HttpxInput{Domain: result.Domain}
+	case models.TaskDNSResolve:
+		// For DNSX, we can process either a single domain or multiple subdomains
+		// Use the utility function to properly parse subdomains from the input
+		subdomains := utils.ReadSubdomainsFromString(result.Domain)
+
+		dnsxInput := models.DNSXInput{
+			Domain: result.Domain,
+		}
+
+		if len(subdomains) > 1 {
+			// Multiple subdomains provided, use the first as the main domain
+			dnsxInput.Domain = subdomains[0]
+			dnsxInput.Subdomains = subdomains
+		} else if len(subdomains) == 1 {
+			// Single domain
+			dnsxInput.Domain = subdomains[0]
+		}
+
+		// Add hosts file location if provided in the task message
+		if taskMsg.FilePath != "" {
+			dnsxInput.HostsFileLocation = taskMsg.FilePath
+			gologger.Info().Msgf("DNSX task with hosts file (file_path): %s", taskMsg.FilePath)
+		} else if taskMsg.HostsFileLocation != "" {
+			dnsxInput.HostsFileLocation = taskMsg.HostsFileLocation
+			gologger.Info().Msgf("DNSX task with hosts file (hosts_file_location): %s", taskMsg.HostsFileLocation)
+		} else {
+			gologger.Info().Msgf("DNSX task without hosts file, domain: %s", result.Domain)
+		}
+
+		scannerInput = dnsxInput
+	default:
+		scannerInput = models.SubfinderInput{Domain: result.Domain}
+	}
+
+	// Validate input BEFORE executing
+	if baseScanner := scanner.GetBaseScanner(); baseScanner != nil {
+		if validator, ok := baseScanner.(interface {
+			ValidateInput(models.ScannerInput) error
+		}); ok {
+			if err := validator.ValidateInput(scannerInput); err != nil {
+				result.Status = models.TaskStatusFailed
+				result.Error = fmt.Sprintf("invalid input: %v", err)
+				gologger.Error().Msgf("Input validation failed for domain %s: %v", taskMsg.Domain, err)
+				h.sendDiscordNotification(ctx, taskMsg, result, err, notification.StepTaskFailed)
+				return h.createFailureResult(err, false)
+			}
+		}
+	}
+
+	scannerResult, err := scanner.Execute(scannerCtx, scannerInput)
 	if err != nil {
 		result.Status = models.TaskStatusFailed
 		result.Error = err.Error()
 		gologger.Error().Msgf("Task failed for domain %s: %v", taskMsg.Domain, err)
 
-		// Send Discord notification for task failed
-		if h.enableDiscordNotifications && h.discordNotifier != nil {
-			if notifyErr := h.discordNotifier.NotifyTaskFailed(ctx, taskMsg, err); notifyErr != nil {
-				gologger.Warning().Msgf("Failed to send Discord notification for task failed: %v", notifyErr)
-			}
-		}
+		h.sendDiscordNotification(ctx, taskMsg, result, err, notification.StepTaskFailed)
 
-		// Determine if error is retryable
 		retryable := h.errorClassifier.IsRetryableError(err)
-
-		return &models.MessageProcessingResult{
-			Success:   false,
-			Error:     err,
-			Retryable: retryable,
-		}
+		return h.createFailureResult(err, retryable)
 	}
 
 	result.Status = models.TaskStatusCompleted
-	gologger.Info().Msgf("Task completed successfully for domain: %s", taskMsg.Domain)
+	result.Data = scannerResult
+	gologger.Info().Msgf("Task completed successfully for domain: %s using %s, found %d results",
+		taskMsg.Domain, scanner.GetName(), scannerResult.GetCount())
 
-	// Send Discord notification for task completed
-	if h.enableDiscordNotifications && h.discordNotifier != nil {
-		if notifyErr := h.discordNotifier.NotifyTaskCompleted(ctx, taskMsg, result); notifyErr != nil {
-			gologger.Warning().Msgf("Failed to send Discord notification for task completed: %v", notifyErr)
+	h.sendDiscordNotification(ctx, taskMsg, result, nil, notification.StepTaskCompleted)
+	return &models.MessageProcessingResult{Success: true}
+}
+
+// finalizeTask stores the result and sends completion notifications
+func (h *TaskHandler) finalizeTask(ctx context.Context, taskMsg *models.TaskMessage, result *models.TaskResult) *models.MessageProcessingResult {
+	// For subfinder, only store as text file, not JSON
+	if result.Task == models.TaskSubfinder {
+		if subfinderResult, ok := result.Data.(models.SubfinderResult); ok {
+			err := h.blobClient.StoreSubfinderTextResult(ctx, &subfinderResult, result.ScanID, string(result.Task))
+			if err != nil {
+				gologger.Error().Msgf("Failed to store subfinder txt result for domain %s: %v", taskMsg.Domain, err)
+				return h.createFailureResult(err, true) // Storage errors are usually retryable
+			}
+			gologger.Info().Msgf("Stored subfinder text result for domain %s", taskMsg.Domain)
+		}
+	} else {
+		// For other tasks, store as JSON
+		if storeErr := h.blobClient.StoreTaskResult(ctx, result); storeErr != nil {
+			gologger.Error().Msgf("Failed to store task result for domain %s: %v", taskMsg.Domain, storeErr)
+			return h.createFailureResult(storeErr, true) // Storage errors are usually retryable
 		}
 	}
 
-	// Store result in blob storage
-	if storeErr := h.blobClient.StoreTaskResult(ctx, result); storeErr != nil {
-		gologger.Error().Msgf("Failed to store task result for domain %s: %v", taskMsg.Domain, storeErr)
-
-		// Storage errors are usually retryable
-		return &models.MessageProcessingResult{
-			Success:   false,
-			Error:     storeErr,
-			Retryable: true,
-		}
-	}
-
-	// Send Discord notification for result stored
-	if h.enableDiscordNotifications && h.discordNotifier != nil {
-		if notifyErr := h.discordNotifier.NotifyResultStored(ctx, taskMsg, result); notifyErr != nil {
-			gologger.Warning().Msgf("Failed to send Discord notification for result stored: %v", notifyErr)
-		}
-	}
+	h.sendDiscordNotification(ctx, taskMsg, result, nil, notification.StepResultStored)
 
 	// Send completion notification if enabled
-	if h.enableNotifications && h.notifier != nil {
+	if h.notifier != nil {
 		if notifyErr := h.sendCompletionNotification(ctx, taskMsg, result); notifyErr != nil {
 			gologger.Warning().Msgf("Failed to send completion notification for domain %s: %v", taskMsg.Domain, notifyErr)
-			// Don't fail the task if notification fails, just log it
 		} else {
-			// Send Discord notification for Azure notification sent
-			if h.enableDiscordNotifications && h.discordNotifier != nil {
-				if discordErr := h.discordNotifier.NotifyNotificationSent(ctx, taskMsg, result); discordErr != nil {
-					gologger.Warning().Msgf("Failed to send Discord notification for Azure notification sent: %v", discordErr)
-				}
-			}
+			h.sendDiscordNotification(ctx, taskMsg, result, nil, notification.StepNotificationSent)
 		}
 	}
 
+	return &models.MessageProcessingResult{Success: true}
+}
+
+// sendDiscordNotification sends a Discord notification for a specific step
+func (h *TaskHandler) sendDiscordNotification(ctx context.Context, taskMsg *models.TaskMessage, result *models.TaskResult, err error, step notification.NotificationStep) {
+	if h.discordNotifier == nil {
+		return
+	}
+
+	if notifyErr := h.discordNotifier.NotifyStep(ctx, step, taskMsg, result, err); notifyErr != nil {
+		gologger.Warning().Msgf("Failed to send Discord notification for step %s: %v", step, notifyErr)
+	}
+}
+
+// createFailureResult creates a failure result with the given error and retryable flag
+func (h *TaskHandler) createFailureResult(err error, retryable bool) *models.MessageProcessingResult {
 	return &models.MessageProcessingResult{
-		Success:   true,
-		Error:     nil,
-		Retryable: false,
+		Success:   false,
+		Error:     err,
+		Retryable: retryable,
 	}
-}
-
-// handleSubfinderTask processes subfinder tasks
-func (h *TaskHandler) handleSubfinderTask(ctx context.Context, result *models.TaskResult) error {
-	if result.Domain == "" {
-		return fmt.Errorf("domain is required for subfinder task")
-	}
-
-	subdomains, err := scanners.RunSubfinder(ctx, result.Domain)
-	if err != nil {
-		return fmt.Errorf("subfinder failed: %w", err)
-	}
-
-	result.Data = map[string]interface{}{
-		"subdomains": subdomains,
-		"count":      len(subdomains),
-	}
-
-	gologger.Info().Msgf("Subfinder completed. Found %d subdomains for %s", len(subdomains), result.Domain)
-	return nil
-}
-
-// handleHttpxTask processes httpx tasks
-func (h *TaskHandler) handleHttpxTask(ctx context.Context, result *models.TaskResult) error {
-	if result.Domain == "" {
-		return fmt.Errorf("domain is required for httpx task")
-	}
-
-	results, err := scanners.RunHttpx(ctx, result.Domain)
-	if err != nil {
-		return fmt.Errorf("httpx failed: %w", err)
-	}
-
-	result.Data = map[string]interface{}{
-		"results": results,
-		"count":   len(results),
-	}
-
-	gologger.Info().Msgf("HTTPX completed. Found %d results for %s", len(results), result.Domain)
-	return nil
-}
-
-// handleDNSXTask processes DNSX tasks
-func (h *TaskHandler) handleDNSXTask(ctx context.Context, result *models.TaskResult) error {
-	if result.Domain == "" {
-		return fmt.Errorf("domain is required for DNSX task")
-	}
-
-	results, err := scanners.RunDNSX(ctx, result.Domain)
-	if err != nil {
-		return fmt.Errorf("DNSX failed: %w", err)
-	}
-
-	result.Data = map[string]interface{}{
-		"results": results,
-		"count":   len(results),
-	}
-
-	gologger.Info().Msgf("DNSX completed. Found %d results for %s", len(results), result.Domain)
-	return nil
 }
 
 // sendCompletionNotification sends a completion notification to the Azure Function orchestrator
 func (h *TaskHandler) sendCompletionNotification(ctx context.Context, taskMsg *models.TaskMessage, result *models.TaskResult) error {
-	// Use ScanID as the instance ID for the durable function
-	instanceID := taskMsg.InstanceID
-	if instanceID == "" {
+	if taskMsg.InstanceID == "" {
 		return fmt.Errorf("instance_id is required for notification")
 	}
 
-	// Map task names to tool names for the notification
 	toolName := string(taskMsg.Task)
+	gologger.Info().Msgf("Sending completion notification for task %s, domain %s, instance %s", toolName, taskMsg.Domain, taskMsg.InstanceID)
 
-	gologger.Info().Msgf("Sending completion notification for task %s, domain %s, instance %s", toolName, taskMsg.Domain, instanceID)
-
-	// Send notification with retry logic
-	return h.notifier.NotifyCompletionWithRetry(ctx, instanceID, toolName, result)
+	return h.notifier.NotifyCompletionWithRetry(ctx, taskMsg.InstanceID, toolName, result)
 }

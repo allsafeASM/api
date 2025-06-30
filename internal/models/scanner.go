@@ -1,0 +1,121 @@
+package models
+
+import (
+	"context"
+)
+
+// Scanner defines the interface for all security scanners
+type Scanner interface {
+	Execute(ctx context.Context, input interface{}) (ScannerResult, error)
+	GetName() string
+	GetBaseScanner() interface{} // Return interface{} to avoid import cycle
+}
+
+// ScannerResult represents the common interface for all scanner results
+type ScannerResult interface {
+	GetCount() int
+	GetDomain() string
+}
+
+// ScannerInput represents the base interface for all scanner inputs
+type ScannerInput interface {
+	GetDomain() string
+	GetScannerName() string
+}
+
+// SubfinderInput represents input for the subfinder scanner
+type SubfinderInput struct {
+	Domain string `json:"domain"`
+}
+
+func (s SubfinderInput) GetDomain() string {
+	return s.Domain
+}
+
+func (s SubfinderInput) GetScannerName() string {
+	return "subfinder"
+}
+
+// SubfinderResult represents the result of a subfinder scan
+type SubfinderResult struct {
+	Domain     string   `json:"domain"`
+	Subdomains []string `json:"subdomains"`
+}
+
+func (r SubfinderResult) GetCount() int {
+	return len(r.Subdomains)
+}
+
+func (r SubfinderResult) GetDomain() string {
+	return r.Domain
+}
+
+// HttpxInput represents input for the httpx scanner
+type HttpxInput struct {
+	Domain string `json:"domain"`
+	// Future fields could include:
+	// Ports []int `json:"ports,omitempty"`
+	// Threads int `json:"threads,omitempty"`
+	// Timeout time.Duration `json:"timeout,omitempty"`
+}
+
+func (h HttpxInput) GetDomain() string {
+	return h.Domain
+}
+
+func (h HttpxInput) GetScannerName() string {
+	return "httpx"
+}
+
+// HttpxResult represents the result of an httpx scan
+type HttpxResult struct {
+	Domain string   `json:"domain"`
+	URLs   []string `json:"urls"`
+}
+
+func (r HttpxResult) GetCount() int {
+	return len(r.URLs)
+}
+
+func (r HttpxResult) GetDomain() string {
+	return r.Domain
+}
+
+// DNSXInput represents input for the dnsx scanner
+type DNSXInput struct {
+	Domain            string   `json:"domain"`
+	Subdomains        []string `json:"subdomains,omitempty"`          // List of subdomains to resolve
+	HostsFileLocation string   `json:"hosts_file_location,omitempty"` // The location of where the hosts file is located from blob storage
+	// Future fields could include:
+	// RecordTypes []string `json:"record_types,omitempty"`
+	// Resolvers []string `json:"resolvers,omitempty"`
+}
+
+func (d DNSXInput) GetDomain() string {
+	return d.Domain
+}
+
+func (d DNSXInput) GetScannerName() string {
+	return "dnsx"
+}
+
+// DNSXResult represents the result of a dnsx scan
+type DNSXResult struct {
+	Domain  string                    `json:"domain"`
+	Records map[string]ResolutionInfo `json:"output"`
+}
+
+// ResolutionInfo represents DNS resolution information for a record type
+type ResolutionInfo struct {
+	Status string   `json:"status"`
+	A      []string `json:"A,omitempty"`
+	CNAME  []string `json:"CNAME,omitempty"`
+}
+
+func (r DNSXResult) GetCount() int {
+	return len(r.Records)
+}
+
+func (r DNSXResult) GetDomain() string {
+	return r.Domain
+}

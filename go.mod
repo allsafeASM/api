@@ -8,6 +8,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/projectdiscovery/dnsx v1.2.2
 	github.com/projectdiscovery/gologger v1.1.54
+	github.com/projectdiscovery/retryabledns v1.0.101
 	github.com/projectdiscovery/subfinder/v2 v2.8.0
 )
 
@@ -86,7 +87,6 @@ require (
 	github.com/projectdiscovery/machineid v0.0.0-20240226150047-2e2c51e35983 // indirect
 	github.com/projectdiscovery/networkpolicy v0.1.15 // indirect
 	github.com/projectdiscovery/ratelimit v0.0.81 // indirect
-	github.com/projectdiscovery/retryabledns v1.0.101 // indirect
 	github.com/projectdiscovery/retryablehttp-go v1.0.114 // indirect
 	github.com/projectdiscovery/utils v0.4.20 // indirect
 	github.com/refraction-networking/utls v1.7.0 // indirect

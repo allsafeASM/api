@@ -1,5 +1,4 @@
-# Ultra-minimal build for AllSafe ASM Worker - Optimized for size
-# Build stage
+# Build for AllSafe ASM Worker
 FROM golang:1.24.4-alpine AS builder
 
 # Install build dependencies
@@ -11,14 +10,18 @@ WORKDIR /app
 # Copy go mod files first for better layer caching
 COPY go.mod go.sum ./
 
-# Download dependencies
-RUN go mod download
+# Download dependencies with BuildKit cache mount
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go mod download
 
 # Copy source code
 COPY . .
 
-# Build the application with maximum optimizations
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+# Build the application with maximum optimizations and BuildKit cache
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -a \
     -ldflags="-w -s -extldflags '-static'" \
     -o api .
