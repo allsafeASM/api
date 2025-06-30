@@ -22,7 +22,7 @@ jobs:
       
     # ADDED: This 'outputs' block makes the image name available to other jobs
     outputs:
-      image_tag: ${{ steps.meta.outputs.version }}
+      image_tag: ${{ github.ref_name }}
       
     steps:
       - name: Checkout repository
@@ -57,8 +57,7 @@ jobs:
         with:
           context: .
           platforms: linux/amd64
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ github.ref_name }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
