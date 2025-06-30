@@ -292,7 +292,7 @@ func (s *NaabuScanner) buildNaabuOptions(naabuInput models.NaabuInput, ips []str
 		Host: ips,
 	}
 
-	// Port configuration
+	// Port configuration with priority: specific ports > port range > top ports > default
 	if len(naabuInput.Ports) > 0 {
 		// Convert ports to string format
 		portStrs := make([]string, len(naabuInput.Ports))
@@ -300,36 +300,46 @@ func (s *NaabuScanner) buildNaabuOptions(naabuInput models.NaabuInput, ips []str
 			portStrs[i] = strconv.Itoa(port)
 		}
 		options.Ports = strings.Join(portStrs, ",")
+		gologger.Info().Msgf("Using specific ports: %s", options.Ports)
 	} else if naabuInput.PortRange != "" {
 		options.Ports = naabuInput.PortRange
-	} else if naabuInput.TopPorts > 0 {
-		options.TopPorts = strconv.Itoa(naabuInput.TopPorts)
+		gologger.Info().Msgf("Using port range: %s", options.Ports)
+	} else if naabuInput.TopPorts != "" {
+		options.TopPorts = naabuInput.TopPorts
+		gologger.Info().Msgf("Using top ports: %s", options.TopPorts)
 	} else {
-		// Default to top 50 ports instead of 100 for faster scanning
-		options.TopPorts = "50"
+		// Default to top 100 ports (naabu only supports: full, 100, 1000)
+		options.TopPorts = "100"
+		gologger.Info().Msgf("Using default top ports: %s", options.TopPorts)
 	}
 
 	// Rate limiting and concurrency - set reasonable defaults
 	if naabuInput.RateLimit > 0 {
 		options.Rate = naabuInput.RateLimit
+		gologger.Info().Msgf("Using custom rate limit: %d", options.Rate)
 	} else {
 		// Default rate limit of 1000 packets per second
 		options.Rate = 1000
+		gologger.Info().Msgf("Using default rate limit: %d", options.Rate)
 	}
 
 	if naabuInput.Concurrency > 0 {
 		options.Threads = naabuInput.Concurrency
+		gologger.Info().Msgf("Using custom concurrency: %d", options.Threads)
 	} else {
 		// Default to 25 concurrent threads for better performance
 		options.Threads = 25
+		gologger.Info().Msgf("Using default concurrency: %d", options.Threads)
 	}
 
 	// Timeout configuration
 	if naabuInput.Timeout > 0 {
 		options.Timeout = time.Duration(naabuInput.Timeout) * time.Second
+		gologger.Info().Msgf("Using custom timeout: %v", options.Timeout)
 	} else {
 		// Default timeout of 30 seconds per host
 		options.Timeout = 30 * time.Second
+		gologger.Info().Msgf("Using default timeout: %v", options.Timeout)
 	}
 
 	// Performance optimizations

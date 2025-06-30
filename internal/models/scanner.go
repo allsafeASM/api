@@ -127,7 +127,7 @@ type NaabuInput struct {
 	HostsFileLocation string   `json:"input_blob_path,omitempty"` // The location of where the hosts file is located from blob storage
 	Ports             []int    `json:"ports,omitempty"`           // Specific ports to scan
 	PortRange         string   `json:"port_range,omitempty"`      // Port range (e.g., "1-1000")
-	TopPorts          int      `json:"top_ports,omitempty"`       // Number of top ports to scan
+	TopPorts          string   `json:"top_ports,omitempty"`       // Number of top ports to scan (valid values: "full", "100", "1000")
 	RateLimit         int      `json:"rate_limit,omitempty"`      // Rate limit for scanning
 	Concurrency       int      `json:"concurrency,omitempty"`     // Number of concurrent scans
 	Timeout           int      `json:"timeout,omitempty"`         // Timeout in seconds

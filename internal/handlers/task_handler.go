@@ -158,9 +158,35 @@ func (h *TaskHandler) processTask(ctx context.Context, taskMsg *models.TaskMessa
 
 		// Add naabu-specific parameters from config if provided
 		if taskMsg.Config != nil {
-			if topPorts, ok := taskMsg.Config["top_ports"].(float64); ok && topPorts > 0 {
-				naabuInput.TopPorts = int(topPorts)
-				gologger.Info().Msgf("Naabu task with top ports: %d", naabuInput.TopPorts)
+			if topPorts, ok := taskMsg.Config["top_ports"]; ok && topPorts != "" {
+				switch v := topPorts.(type) {
+				case string:
+					naabuInput.TopPorts = v
+				case float64:
+					// Convert numeric values to string format that naabu expects
+					if v == 100 {
+						naabuInput.TopPorts = "100"
+					} else if v == 1000 {
+						naabuInput.TopPorts = "1000"
+					} else {
+						gologger.Warning().Msgf("Invalid top_ports numeric value: %.0f (must be 100 or 1000), using default", v)
+						naabuInput.TopPorts = "100" // Default fallback
+					}
+				case int:
+					// Convert numeric values to string format that naabu expects
+					if v == 100 {
+						naabuInput.TopPorts = "100"
+					} else if v == 1000 {
+						naabuInput.TopPorts = "1000"
+					} else {
+						gologger.Warning().Msgf("Invalid top_ports numeric value: %d (must be 100 or 1000), using default", v)
+						naabuInput.TopPorts = "100" // Default fallback
+					}
+				default:
+					gologger.Warning().Msgf("Invalid top_ports type: %T, value: %v, using default", topPorts, topPorts)
+					naabuInput.TopPorts = "100" // Default fallback
+				}
+				gologger.Info().Msgf("Naabu task with top ports: %s", naabuInput.TopPorts)
 			}
 			if ports, ok := taskMsg.Config["ports"].([]interface{}); ok && len(ports) > 0 {
 				naabuInput.Ports = make([]int, len(ports))

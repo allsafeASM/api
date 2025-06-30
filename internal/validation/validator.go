@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/allsafeASM/api/internal/models"
+	"github.com/projectdiscovery/gologger"
 )
 
 // Validator provides all validation functionality
@@ -145,12 +146,18 @@ func (v *Validator) ValidateNaabuInput(input models.NaabuInput) error {
 		return fmt.Errorf("cannot specify both specific ports and port range")
 	}
 
-	if len(input.Ports) > 0 && input.TopPorts > 0 {
+	if len(input.Ports) > 0 && input.TopPorts != "" {
 		return fmt.Errorf("cannot specify both specific ports and top ports")
 	}
 
-	if input.PortRange != "" && input.TopPorts > 0 {
+	if input.PortRange != "" && input.TopPorts != "" {
 		return fmt.Errorf("cannot specify both port range and top ports")
+	}
+
+	// Ensure at least one port configuration method is provided
+	if len(input.Ports) == 0 && input.PortRange == "" && input.TopPorts == "" {
+		// This is okay - naabu will use default top ports (100)
+		gologger.Info().Msg("No port configuration provided, naabu will use default top 100 ports")
 	}
 
 	// Validate port numbers
@@ -161,8 +168,15 @@ func (v *Validator) ValidateNaabuInput(input models.NaabuInput) error {
 	}
 
 	// Validate top ports
-	if input.TopPorts < 0 {
-		return fmt.Errorf("top ports cannot be negative")
+	if input.TopPorts != "" {
+		validTopPorts := map[string]bool{
+			"full": true,
+			"100":  true,
+			"1000": true,
+		}
+		if !validTopPorts[input.TopPorts] {
+			return fmt.Errorf("invalid top_ports value: %s (must be one of: full, 100, 1000)", input.TopPorts)
+		}
 	}
 
 	// Validate rate limit and concurrency
