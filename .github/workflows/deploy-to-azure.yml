@@ -1,0 +1,65 @@
+# .github/workflows/deploy-only.yml
+
+name: Deploy to Azure Container App
+
+# Environment variables available to the job
+env:
+  # Your Docker Hub username
+  DOCKERHUB_USERNAME: hazemusama
+  # The name of your repository on Docker Hub
+  DOCKERHUB_REPO: api
+
+on:
+  # Option 1: Trigger manually from the GitHub Actions tab
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'The branch name to deploy (e.g., "main", "develop")'
+        required: true
+        default: 'main'
+        type: string
+
+  # Option 2: Trigger automatically on a push to the main branch
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy-to-azure:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Determine the image tag based on the trigger
+      - name: Determine Image Tag
+        id: get_tag
+        # This shell script checks if the workflow was triggered by a manual dispatch or a push.
+        # It then constructs the tag 'main-branchname' and makes it available to other steps.
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "image_tag=main-${{ github.event.inputs.branch }}" >> $GITHUB_OUTPUT
+          else
+            echo "image_tag=main-${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      # 2. Log in to Azure using the Service Principal credentials
+      - name: 'Login to Azure'
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # 3. Deploy the specific image to Azure Container App
+      - name: 'Deploy to Azure Container App'
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          # The full name of the image on Docker Hub to deploy
+          imageToDeploy: ${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPO }}:${{ steps.get_tag.outputs.image_tag }}
+          
+          # Azure resource information
+          containerAppName: ${{ secrets.CONTAINER_APP_NAME }}
+          resourceGroup: ${{ secrets.RESOURCE_GROUP }}
+          
+          # Credentials for your PRIVATE Docker Hub repository
+          # This allows Azure Container Apps to securely pull the image
+          registryUrl: docker.io
+          registryUsername: ${{ secrets.DOCKERHUB_USERNAME }}
+          registryPassword: ${{ secrets.DOCKERHUB_TOKEN }}
