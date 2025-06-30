@@ -235,8 +235,8 @@ func (s *NaabuScanner) buildNaabuOptions(naabuInput models.NaabuInput, ips []str
 	} else if naabuInput.TopPorts > 0 {
 		options.TopPorts = strconv.Itoa(naabuInput.TopPorts)
 	} else {
-		// Default to top 1000 ports if no port specification
-		options.TopPorts = "1000"
+		// Default to top 100 ports if no port specification
+		options.TopPorts = "100"
 	}
 
 	// Rate limiting and concurrency
