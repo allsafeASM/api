@@ -16,13 +16,13 @@ on:
       branch:
         description: 'The commit name to deploy'
         required: true
-        default: '${{ github.ref_name }}'
+        default: 'main'
         type: string
 
   # Option 2: Trigger after "Build and Push Docker Image" complete
   workflow_run:
     # This specifies which workflow must complete before this one runs.
-    workflows: ["Build and Push to Docker Hub"]
+    workflows: ["Build and Push Docker Image"]
     # This specifies that this workflow will only run after the 'Build' workflow is 'completed'.
     types:
       - completed
