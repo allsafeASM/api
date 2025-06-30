@@ -53,6 +53,24 @@ func ReadSubdomainsFromString(content string) []string {
 	return subdomains
 }
 
+// ReadIPsFromString reads IPs from a string, splitting by newlines
+// This is useful when the IPs are passed as a string rather than a file
+func ReadIPsFromString(content string) []string {
+	lines := strings.Split(content, "\n")
+	var ips []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// Skip empty lines and comments
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		ips = append(ips, trimmed)
+	}
+
+	return ips
+}
+
 // ValidateSubdomainFile checks if a file exists and is readable
 func ValidateSubdomainFile(filepath string) error {
 	file, err := os.Open(filepath)

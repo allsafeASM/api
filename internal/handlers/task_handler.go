@@ -142,6 +142,54 @@ func (h *TaskHandler) processTask(ctx context.Context, taskMsg *models.TaskMessa
 		}
 
 		scannerInput = dnsxInput
+	case models.TaskNaabu:
+		// For Naabu port scanning
+		naabuInput := models.NaabuInput{
+			Domain: result.Domain,
+		}
+
+		// Add hosts file location if provided in the task message
+		if taskMsg.FilePath != "" {
+			naabuInput.HostsFileLocation = taskMsg.FilePath
+			gologger.Info().Msgf("Naabu task with hosts file (file_path): %s", taskMsg.FilePath)
+		} else {
+			gologger.Info().Msgf("Naabu task without hosts file, domain: %s", result.Domain)
+		}
+
+		// Add naabu-specific parameters from config if provided
+		if taskMsg.Config != nil {
+			if topPorts, ok := taskMsg.Config["top_ports"].(float64); ok && topPorts > 0 {
+				naabuInput.TopPorts = int(topPorts)
+				gologger.Info().Msgf("Naabu task with top ports: %d", naabuInput.TopPorts)
+			}
+			if ports, ok := taskMsg.Config["ports"].([]interface{}); ok && len(ports) > 0 {
+				naabuInput.Ports = make([]int, len(ports))
+				for i, port := range ports {
+					if portNum, ok := port.(float64); ok {
+						naabuInput.Ports[i] = int(portNum)
+					}
+				}
+				gologger.Info().Msgf("Naabu task with specific ports: %v", naabuInput.Ports)
+			}
+			if portRange, ok := taskMsg.Config["port_range"].(string); ok && portRange != "" {
+				naabuInput.PortRange = portRange
+				gologger.Info().Msgf("Naabu task with port range: %s", portRange)
+			}
+			if rateLimit, ok := taskMsg.Config["rate_limit"].(float64); ok && rateLimit > 0 {
+				naabuInput.RateLimit = int(rateLimit)
+				gologger.Info().Msgf("Naabu task with rate limit: %d", naabuInput.RateLimit)
+			}
+			if concurrency, ok := taskMsg.Config["concurrency"].(float64); ok && concurrency > 0 {
+				naabuInput.Concurrency = int(concurrency)
+				gologger.Info().Msgf("Naabu task with concurrency: %d", naabuInput.Concurrency)
+			}
+			if timeout, ok := taskMsg.Config["timeout"].(float64); ok && timeout > 0 {
+				naabuInput.Timeout = int(timeout)
+				gologger.Info().Msgf("Naabu task with timeout: %d seconds", naabuInput.Timeout)
+			}
+		}
+
+		scannerInput = naabuInput
 	default:
 		scannerInput = models.SubfinderInput{Domain: result.Domain}
 	}

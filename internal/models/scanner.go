@@ -119,3 +119,49 @@ func (r DNSXResult) GetCount() int {
 func (r DNSXResult) GetDomain() string {
 	return r.Domain
 }
+
+// NaabuInput represents input for the naabu scanner
+type NaabuInput struct {
+	Domain            string   `json:"domain"`
+	IPs               []string `json:"ips,omitempty"`             // List of IPs to scan
+	HostsFileLocation string   `json:"input_blob_path,omitempty"` // The location of where the hosts file is located from blob storage
+	Ports             []int    `json:"ports,omitempty"`           // Specific ports to scan
+	PortRange         string   `json:"port_range,omitempty"`      // Port range (e.g., "1-1000")
+	TopPorts          int      `json:"top_ports,omitempty"`       // Number of top ports to scan
+	RateLimit         int      `json:"rate_limit,omitempty"`      // Rate limit for scanning
+	Concurrency       int      `json:"concurrency,omitempty"`     // Number of concurrent scans
+	Timeout           int      `json:"timeout,omitempty"`         // Timeout in seconds
+}
+
+func (n NaabuInput) GetDomain() string {
+	return n.Domain
+}
+
+func (n NaabuInput) GetScannerName() string {
+	return "naabu"
+}
+
+// NaabuResult represents the result of a naabu scan
+type NaabuResult struct {
+	Domain string                `json:"domain"`
+	Ports  map[string][]PortInfo `json:"ports"` // IP -> []PortInfo
+}
+
+// PortInfo represents information about an open port
+type PortInfo struct {
+	Port     int    `json:"port"`
+	Protocol string `json:"protocol"`
+	Service  string `json:"service,omitempty"`
+}
+
+func (r NaabuResult) GetCount() int {
+	total := 0
+	for _, ports := range r.Ports {
+		total += len(ports)
+	}
+	return total
+}
+
+func (r NaabuResult) GetDomain() string {
+	return r.Domain
+}

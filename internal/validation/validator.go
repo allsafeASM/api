@@ -2,6 +2,7 @@ package validation
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/allsafeASM/api/internal/models"
@@ -120,12 +121,91 @@ func (v *Validator) ValidateDNSXInput(input models.DNSXInput) error {
 	return nil
 }
 
+// ValidateNaabuInput validates naabu input
+func (v *Validator) ValidateNaabuInput(input models.NaabuInput) error {
+	// For Naabu, we can have either IPs OR a hosts file location, or both
+	if len(input.IPs) == 0 && input.HostsFileLocation == "" {
+		return fmt.Errorf("either IPs or hosts file location must be provided for Naabu scanner")
+	}
+
+	// If IPs are provided, validate each one
+	if len(input.IPs) > 0 {
+		for i, ip := range input.IPs {
+			if ip == "" {
+				continue // Skip empty IPs
+			}
+			if !v.isValidIP(ip) {
+				return fmt.Errorf("invalid IP address at index %d: %s", i, ip)
+			}
+		}
+	}
+
+	// Validate port configuration
+	if len(input.Ports) > 0 && input.PortRange != "" {
+		return fmt.Errorf("cannot specify both specific ports and port range")
+	}
+
+	if len(input.Ports) > 0 && input.TopPorts > 0 {
+		return fmt.Errorf("cannot specify both specific ports and top ports")
+	}
+
+	if input.PortRange != "" && input.TopPorts > 0 {
+		return fmt.Errorf("cannot specify both port range and top ports")
+	}
+
+	// Validate port numbers
+	for i, port := range input.Ports {
+		if port < 1 || port > 65535 {
+			return fmt.Errorf("invalid port number at index %d: %d (must be 1-65535)", i, port)
+		}
+	}
+
+	// Validate top ports
+	if input.TopPorts < 0 {
+		return fmt.Errorf("top ports cannot be negative")
+	}
+
+	// Validate rate limit and concurrency
+	if input.RateLimit < 0 {
+		return fmt.Errorf("rate limit cannot be negative")
+	}
+
+	if input.Concurrency < 0 {
+		return fmt.Errorf("concurrency cannot be negative")
+	}
+
+	// Validate timeout
+	if input.Timeout < 0 {
+		return fmt.Errorf("timeout cannot be negative")
+	}
+
+	return nil
+}
+
+// isValidIP performs basic IP validation
+func (v *Validator) isValidIP(ip string) bool {
+	// Basic validation - you might want to use net.ParseIP for more robust validation
+	parts := strings.Split(ip, ".")
+	if len(parts) != 4 {
+		return false
+	}
+
+	for _, part := range parts {
+		if num, err := strconv.Atoi(part); err != nil || num < 0 || num > 255 {
+			return false
+		}
+	}
+
+	return true
+}
+
 // isValidTaskType checks if the task type is supported
 func (v *Validator) isValidTaskType(taskType models.Task) bool {
 	validTasks := map[models.Task]bool{
 		models.TaskSubfinder:  true,
 		models.TaskHttpx:      true,
 		models.TaskDNSResolve: true,
+		models.TaskNaabu:      true,
 	}
 	return validTasks[taskType]
 }

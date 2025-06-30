@@ -7,6 +7,8 @@ type TaskMessage struct {
 	Domain     string `json:"domain"`
 	InstanceID string `json:"instance_id"`
 	FilePath   string `json:"input_blob_path,omitempty"` // Optional file path for tools that need file input
+
+	Config map[string]interface{} `json:"config,omitempty"` // Tool-specific configuration
 }
 
 // TaskResult represents the result of a completed task
@@ -28,6 +30,7 @@ const (
 	TaskSubfinder  Task = "subfinder"
 	TaskHttpx      Task = "httpx"
 	TaskDNSResolve Task = "dns_resolve"
+	TaskNaabu      Task = "port_scan"
 )
 
 // Task status
