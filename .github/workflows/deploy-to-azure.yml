@@ -8,7 +8,7 @@ on:
 
   workflow_call:
     inputs:
-      IMAGE_TO_DEPLOY:
+      image_tag:
         description: 'The tag needed to deploy'
         required: true
         type: string
@@ -29,8 +29,7 @@ jobs:
       - name: 'Deploy to Azure Container App'
         uses: azure/container-apps-deploy-action@v1
         with:
-          imageToDeploy: ${{ inputs.IMAGE_TO_DEPLOY }}
-          containerAppName: ${{ secrets.CONTAINER_APP_NAME }}
+          imageToDeploy: ${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPO }}:${{ inputs.image_tag }}          containerAppName: ${{ secrets.CONTAINER_APP_NAME }}
           resourceGroup: ${{ secrets.RESOURCE_GROUP }}
           registryUrl: docker.io
           registryUsername: ${{ secrets.DOCKERHUB_USERNAME }}
