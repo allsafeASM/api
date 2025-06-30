@@ -6,8 +6,7 @@ on:
   push:
     branches: [ main, master ]
     tags: [ 'v*' ]
-  pull_request:
-    branches: [ main, master ]
+
 
 env:
   REGISTRY: docker.io
@@ -23,9 +22,7 @@ jobs:
       
     # ADDED: This 'outputs' block makes the image name available to other jobs
     outputs:
-      # We get the primary tag (e.g., 'main' or 'v1.2.3') from the metadata step
-      # and construct the full image name.
-      image_name: ${{ steps.meta.outputs.tags }}
+      image_tag: ${{ steps.meta.outputs.version }}
       
     steps:
       - name: Checkout repository
@@ -66,26 +63,24 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Pass tag to Azure deploy
+      - id: azure-tag
+        run: echo "tag=${{ steps.meta.outputs.tags }}" >> "$GITHUB_OUTPUT"
+
   # --- JOB 2: Call the Reusable Deploy Workflow ---
   # CHANGED: 'deploy' is now correctly indented at the same level as 'build-and-push'
   deploy:
     # This job will only run if the 'build-and-push' job completes successfully
     needs: build-and-push
-    
-    # Run this job only for push events, not pull requests
-    if: github.event_name == 'push'
-
-    permissions:
-      contents: read # Required for reusable workflows
-    
+        
     # This 'uses' keyword calls our reusable workflow
-    uses: ./.github/workflows/deploy-reusable.yml # Make sure this filename is correct
+    uses: ./.github/workflows/deploy-to-azure.yml # Make sure this filename is correct
     
     # 'with' provides the inputs defined in the reusable workflow
     with:
       # Pass the output from the 'build-and-push' job directly as an input
       # CHANGED: This now correctly references the job output
-      image-to-deploy: ${{ needs.build-and-push.outputs.image_name }}
+      tag: ${{ needs.build-and-push.outputs.image_tag }}
       
     # 'secrets: inherit' is the modern, easy way to pass all necessary secrets
     secrets: inherit
