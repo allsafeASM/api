@@ -144,7 +144,7 @@ func (n NaabuInput) GetScannerName() string {
 // NaabuResult represents the result of a naabu scan
 type NaabuResult struct {
 	Domain string                `json:"domain"`
-	Ports  map[string][]PortInfo `json:"ports"` // IP -> []PortInfo
+	Ports  map[string][]PortInfo `json:"output"` // IP -> []PortInfo
 }
 
 // PortInfo represents information about an open port
