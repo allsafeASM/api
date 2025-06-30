@@ -76,7 +76,7 @@ jobs:
     with:
       # Pass the output from the 'build-and-push' job directly as an input
       # CHANGED: This now correctly references the job output
-      tag: ${{ needs.build-and-push.outputs.image_tag }}
+      iamge_tag: ${{ needs.build-and-push.outputs.image_tag }}
       
     # 'secrets: inherit' is the modern, easy way to pass all necessary secrets
     secrets: inherit
