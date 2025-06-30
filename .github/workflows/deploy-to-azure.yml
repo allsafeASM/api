@@ -2,46 +2,48 @@
 
 name: Deploy to Azure Container App
 
-# Environment variables available to the job
 env:
-  # Your Docker Hub username
   DOCKERHUB_USERNAME: hazemusama
-  # The name of your repository on Docker Hub
   DOCKERHUB_REPO: api
 
 on:
   # Option 1: Trigger manually from the GitHub Actions tab
   workflow_dispatch:
     inputs:
-      branch:
-        description: 'The commit name to deploy'
+      # CHANGED: The input is now more descriptive
+      tag_specifier:
+        description: 'Use "main" for the latest branch build, or a specific commit SHA for a commit-tagged build.'
         required: true
         default: 'main'
         type: string
 
   # Option 2: Trigger after "Build and Push Docker Image" complete
   workflow_run:
-    # This specifies which workflow must complete before this one runs.
-    workflows: ["Build and Push Docker Image"]
-    # This specifies that this workflow will only run after the 'Build' workflow is 'completed'.
+    workflows: ["Build and Push Docker Image"] # Make sure this name is correct
     types:
       - completed
 
 jobs:
   deploy-to-azure:
     runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch'
 
     steps:
       # 1. Determine the image tag based on the trigger
       - name: Determine Image Tag
         id: get_tag
-        # This shell script checks if the workflow was triggered by a manual dispatch or a push.
-        # It then constructs the tag 'main-branchname' and makes it available to other steps.
+        # CHANGED: The script logic is updated to handle your new requirement
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "image_tag=main-${{ github.event.inputs.branch }}" >> $GITHUB_OUTPUT
+            # This is the new logic for manual triggers
+            if [[ "${{ github.event.inputs.tag_specifier }}" == "main" ]]; then
+              echo "image_tag=main" >> $GITHUB_OUTPUT
+            else
+              echo "image_tag=main-${{ github.event.inputs.tag_specifier }}" >> $GITHUB_OUTPUT
+            fi
           else
-            echo "image_tag=main-${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            # This is the existing logic for automatic runs after a build
+            echo "image_tag=main-${{ github.event.workflow_run.head_branch }}" >> $GITHUB_OUTPUT
           fi
 
       # 2. Log in to Azure using the Service Principal credentials
@@ -54,15 +56,9 @@ jobs:
       - name: 'Deploy to Azure Container App'
         uses: azure/container-apps-deploy-action@v1
         with:
-          # The full name of the image on Docker Hub to deploy
           imageToDeploy: ${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPO }}:${{ steps.get_tag.outputs.image_tag }}
-          
-          # Azure resource information
           containerAppName: ${{ secrets.CONTAINER_APP_NAME }}
           resourceGroup: ${{ secrets.RESOURCE_GROUP }}
-          
-          # Credentials for your PRIVATE Docker Hub repository
-          # This allows Azure Container Apps to securely pull the image
           registryUrl: docker.io
           registryUsername: ${{ secrets.DOCKERHUB_USERNAME }}
           registryPassword: ${{ secrets.DOCKERHUB_TOKEN }}
