@@ -2,14 +2,16 @@ name: Build and Push Docker Image
 
 on:
   push:
-    branches: [ main, master ]
+    # This now triggers on a push to ANY branch, not just main/master
+    branches: [ '**' ] 
     tags: [ 'v*' ]
   pull_request:
     branches: [ main, master ]
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: hazemusama
+  # CHANGED: Updated the image name to include your repository
+  IMAGE_NAME: hazemusama/api
 
 jobs:
   build-and-push:
@@ -39,11 +41,8 @@ jobs:
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         tags: |
-          type=ref,event=branch
-          type=ref,event=pr
+          type=raw,value=main-${{ github.ref_name }}
           type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-          type=sha,prefix={{branch}}-
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
@@ -54,4 +53,4 @@ jobs:
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
-        cache-to: type=gha,mode=max 
+        cache-to: type=gha,mode=max
