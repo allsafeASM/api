@@ -7,44 +7,23 @@ env:
   DOCKERHUB_REPO: api
 
 on:
-  # Option 1: Trigger manually from the GitHub Actions tab
-  workflow_dispatch:
-    inputs:
-      # CHANGED: The input is now more descriptive
-      tag_specifier:
-        description: 'Use "main" for the latest branch build, or a specific commit SHA for a commit-tagged build.'
-        required: true
-        default: 'main'
-        type: string
 
-  # Option 2: Trigger after "Build and Push Docker Image" complete
-  workflow_run:
-    workflows: ["Build and Push Docker Image"] # Make sure this name is correct
-    types:
-      - completed
+  workflow_call:
+    inputs:
+      image_tag:
+        description: 'The tag needed to deploy'
+        required: false
+        type: string
 
 jobs:
   deploy-to-azure:
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch'
 
     steps:
       # 1. Determine the image tag based on the trigger
-      - name: Determine Image Tag
-        id: get_tag
-        # CHANGED: The script logic is updated to handle your new requirement
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            # This is the new logic for manual triggers
-            if [[ "${{ github.event.inputs.tag_specifier }}" == "main" ]]; then
-              echo "image_tag=main" >> $GITHUB_OUTPUT
-            else
-              echo "image_tag=main-${{ github.event.inputs.tag_specifier }}" >> $GITHUB_OUTPUT
-            fi
-          else
-            # This is the existing logic for automatic runs after a build
-            echo "image_tag=main-${{ github.event.workflow_run.head_branch }}" >> $GITHUB_OUTPUT
-          fi
+      - uses: actions/labeler@v4
+        with:
+              image_tag: inputs.image_tag
 
       # 2. Log in to Azure using the Service Principal credentials
       - name: 'Login to Azure'
@@ -56,7 +35,7 @@ jobs:
       - name: 'Deploy to Azure Container App'
         uses: azure/container-apps-deploy-action@v1
         with:
-          imageToDeploy: ${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPO }}:${{ steps.get_tag.outputs.image_tag }}
+          imageToDeploy: ${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPO }}:${{ github.event.inputs.image_tag }}
           containerAppName: ${{ secrets.CONTAINER_APP_NAME }}
           resourceGroup: ${{ secrets.RESOURCE_GROUP }}
           registryUrl: docker.io
