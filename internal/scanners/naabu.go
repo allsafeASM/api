@@ -350,6 +350,7 @@ func (s *NaabuScanner) buildNaabuOptions(naabuInput models.NaabuInput, ips []str
 	options.Passive = false           // Ensure active scanning
 	options.ScanAllIPS = false        // Don't scan all IPs if some are down
 	options.WithHostDiscovery = false // Skip host discovery for faster scanning
+	options.ScanType = "s"            // Use SYN scan for faster scanning
 
 	return options
 }
