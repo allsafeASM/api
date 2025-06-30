@@ -22,7 +22,7 @@ jobs:
       
     # ADDED: This 'outputs' block makes the image name available to other jobs
     outputs:
-      image_tag: ${{ steps.meta.outputs.tags }}
+      IMAGE_TO_DEPLOY: ${{ steps.meta.outputs.tags }}
       
     steps:
       - name: Checkout repository
@@ -71,7 +71,7 @@ jobs:
     with:
       # Pass the output from the 'build' job directly as an input
       # CHANGED: This now correctly references the job output
-      image_tag: ${{ needs.build.outputs.image_tag }}
+      IMAGE_TO_DEPLOY: ${{ needs.build.outputs.IMAGE_TO_DEPLOY }}
       
     # 'secrets: inherit' is the modern, easy way to pass all necessary secrets
     secrets: inherit
