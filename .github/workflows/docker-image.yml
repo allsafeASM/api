@@ -10,7 +10,7 @@ on:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: hazemusama/api
+  tag_name: hazemusama/api
 
 jobs:
   # --- JOB 1: Build and Push the Docker Image ---
@@ -43,7 +43,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.tag_name }}
           tags: |
             type=sha,prefix={{branch}}-
             
