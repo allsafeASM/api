@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/allsafeASM/api/internal/azure"
@@ -25,9 +26,10 @@ type NaabuScanner struct {
 }
 
 // NewNaabuScanner creates a new naabu scanner
-func NewNaabuScanner() *NaabuScanner {
+func NewNaabuScanner(blobClient *azure.BlobStorageClient) *NaabuScanner {
 	return &NaabuScanner{
 		BaseScanner: NewBaseScanner(),
+		blobClient:  blobClient,
 	}
 }
 
@@ -40,12 +42,67 @@ func (s *NaabuScanner) SetBlobClient(blobClient *azure.BlobStorageClient) {
 func (s *NaabuScanner) ValidateInput(input models.ScannerInput) error {
 	// Try to cast to NaabuInput for specific validation
 	if naabuInput, ok := input.(models.NaabuInput); ok {
+		// Validate port range if provided
+		if naabuInput.PortRange != "" {
+			if err := s.validatePortRange(naabuInput.PortRange); err != nil {
+				return common.NewValidationError("portRange", err.Error())
+			}
+		}
+
 		// Use the validator's Naabu-specific validation
 		return s.validator.ValidateNaabuInput(naabuInput)
 	}
 
 	// Fallback to generic validation
 	return s.BaseScanner.ValidateInput(input)
+}
+
+// validatePortRange validates the port range format
+func (s *NaabuScanner) validatePortRange(portRange string) error {
+	// Check if it's a single port
+	if strings.Contains(portRange, "-") {
+		// Port range format: start-end
+		parts := strings.Split(portRange, "-")
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid port range format, expected 'start-end'")
+		}
+
+		startPort, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+		if err != nil {
+			return fmt.Errorf("invalid start port: %s", parts[0])
+		}
+
+		endPort, err := strconv.Atoi(strings.TrimSpace(parts[1]))
+		if err != nil {
+			return fmt.Errorf("invalid end port: %s", parts[1])
+		}
+
+		if startPort < 1 || startPort > 65535 {
+			return fmt.Errorf("start port must be between 1 and 65535")
+		}
+
+		if endPort < 1 || endPort > 65535 {
+			return fmt.Errorf("end port must be between 1 and 65535")
+		}
+
+		if startPort >= endPort {
+			return fmt.Errorf("start port must be less than end port")
+		}
+	} else {
+		// Single port or comma-separated ports
+		ports := strings.Split(portRange, ",")
+		for _, portStr := range ports {
+			port, err := strconv.Atoi(strings.TrimSpace(portStr))
+			if err != nil {
+				return fmt.Errorf("invalid port: %s", portStr)
+			}
+			if port < 1 || port > 65535 {
+				return fmt.Errorf("port must be between 1 and 65535: %d", port)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (s *NaabuScanner) Execute(ctx context.Context, input interface{}) (models.ScannerResult, error) {
@@ -109,15 +166,16 @@ func (s *NaabuScanner) collectIPs(ctx context.Context, naabuInput models.NaabuIn
 	}
 
 	// 2. Read IPs from blob storage if HostsFileLocation is provided
-	if naabuInput.HostsFileLocation != "" && s.blobClient != nil {
+	if naabuInput.HostsFileLocation != "" {
+		if s.blobClient == nil {
+			return nil, common.NewValidationError("blobClient", "blob client is required when HostsFileLocation is provided")
+		}
 		blobIPs, err := s.readIPsFromBlob(ctx, naabuInput.HostsFileLocation)
 		if err != nil {
 			return nil, err
 		}
 		allIPs = append(allIPs, blobIPs...)
 		gologger.Info().Msgf("Added %d IPs from hosts file", len(blobIPs))
-	} else if naabuInput.HostsFileLocation != "" {
-		gologger.Warning().Msgf("Hosts file location provided (%s) but blob client is nil", naabuInput.HostsFileLocation)
 	}
 
 	// Remove duplicates and validate IPs
@@ -161,14 +219,18 @@ func (s *NaabuScanner) deduplicateAndValidateIPs(ips []string) []string {
 
 // executeNaabuScan executes the naabu scan using the library
 func (s *NaabuScanner) executeNaabuScan(ctx context.Context, naabuInput models.NaabuInput, ips []string) (map[string][]models.PortInfo, error) {
+	startTime := time.Now()
+
 	// Create naabu options
 	options := s.buildNaabuOptions(naabuInput, ips)
 
-	gologger.Info().Msgf("Executing naabu with %d IPs", len(ips))
+	gologger.Info().Msgf("Executing naabu with %d IPs, ports: %s, threads: %d, rate: %d",
+		len(ips), options.Ports, options.Threads, options.Rate)
 
 	// Create result storage
 	ports := make(map[string][]models.PortInfo)
 	var resultMutex sync.Mutex
+	var processedIPs int32
 
 	// Set up the OnResult callback
 	options.OnResult = func(hr *result.HostResult) {
@@ -183,6 +245,7 @@ func (s *NaabuScanner) executeNaabuScan(ctx context.Context, naabuInput models.N
 		defer resultMutex.Unlock()
 
 		ip := hr.Host
+		atomic.AddInt32(&processedIPs, 1)
 
 		// Process all ports for this host
 		for _, port := range hr.Ports {
@@ -198,6 +261,9 @@ func (s *NaabuScanner) executeNaabuScan(ctx context.Context, naabuInput models.N
 
 			gologger.Debug().Msgf("Found open port: %s:%d", ip, port.Port)
 		}
+
+		gologger.Info().Msgf("Processed IP %d/%d: %s (found %d open ports)",
+			atomic.LoadInt32(&processedIPs), len(ips), ip, len(hr.Ports))
 	}
 
 	// Create naabu runner
@@ -212,6 +278,10 @@ func (s *NaabuScanner) executeNaabuScan(ctx context.Context, naabuInput models.N
 	if err != nil {
 		return nil, common.NewScannerError("naabu scan failed", err)
 	}
+
+	duration := time.Since(startTime)
+	gologger.Info().Msgf("Naabu scan completed in %v, processed %d IPs, found open ports for %d IPs",
+		duration, len(ips), len(ports))
 
 	return ports, nil
 }
@@ -235,26 +305,41 @@ func (s *NaabuScanner) buildNaabuOptions(naabuInput models.NaabuInput, ips []str
 	} else if naabuInput.TopPorts > 0 {
 		options.TopPorts = strconv.Itoa(naabuInput.TopPorts)
 	} else {
-		// Default to top 100 ports if no port specification
-		options.TopPorts = "100"
+		// Default to top 50 ports instead of 100 for faster scanning
+		options.TopPorts = "50"
 	}
 
-	// Rate limiting and concurrency
+	// Rate limiting and concurrency - set reasonable defaults
 	if naabuInput.RateLimit > 0 {
 		options.Rate = naabuInput.RateLimit
+	} else {
+		// Default rate limit of 1000 packets per second
+		options.Rate = 1000
 	}
 
 	if naabuInput.Concurrency > 0 {
 		options.Threads = naabuInput.Concurrency
+	} else {
+		// Default to 25 concurrent threads for better performance
+		options.Threads = 25
 	}
 
-	// Timeout
+	// Timeout configuration
 	if naabuInput.Timeout > 0 {
 		options.Timeout = time.Duration(naabuInput.Timeout) * time.Second
+	} else {
+		// Default timeout of 30 seconds per host
+		options.Timeout = 30 * time.Second
 	}
 
-	// Additional options for better performance
-	options.Silent = true // Suppress banner and progress
+	// Performance optimizations
+	options.Silent = true             // Suppress banner and progress
+	options.Verbose = false           // Disable verbose output
+	options.NoColor = true            // Disable color output
+	options.Stream = true             // Enable streaming mode for faster processing
+	options.Passive = false           // Ensure active scanning
+	options.ScanAllIPS = false        // Don't scan all IPs if some are down
+	options.WithHostDiscovery = false // Skip host discovery for faster scanning
 
 	return options
 }
