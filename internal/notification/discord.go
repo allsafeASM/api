@@ -77,6 +77,30 @@ const (
 	ColorPurple  = 0x9b59b6 // Purple
 )
 
+// formatDuration formats a duration string to a more readable format
+func formatDuration(durationStr string) string {
+	// Parse the duration string
+	duration, err := time.ParseDuration(durationStr)
+	if err != nil {
+		return durationStr // Return original if parsing fails
+	}
+
+	// Format based on duration length
+	if duration < time.Second {
+		return fmt.Sprintf("%.0fms", float64(duration.Microseconds())/1000)
+	} else if duration < time.Minute {
+		return fmt.Sprintf("%.1fs", duration.Seconds())
+	} else if duration < time.Hour {
+		minutes := int(duration.Minutes())
+		seconds := int(duration.Seconds()) % 60
+		return fmt.Sprintf("%dm %ds", minutes, seconds)
+	} else {
+		hours := int(duration.Hours())
+		minutes := int(duration.Minutes()) % 60
+		return fmt.Sprintf("%dh %dm", hours, minutes)
+	}
+}
+
 // NewDiscordNotifier creates a new Discord notifier
 func NewDiscordNotifier() (*DiscordNotifier, error) {
 	webhookURL := os.Getenv("DISCORD_WEBHOOK_URL")
@@ -174,7 +198,7 @@ func (d *DiscordNotifier) createPayload(step NotificationStep, taskMsg *models.T
 		// Add duration if available
 		if result != nil && result.Duration != "" {
 			embed.Fields = append(embed.Fields, DiscordEmbedField{
-				Name: "Duration", Value: result.Duration, Inline: true,
+				Name: "Duration", Value: formatDuration(result.Duration), Inline: true,
 			})
 		}
 
@@ -199,7 +223,7 @@ func (d *DiscordNotifier) createPayload(step NotificationStep, taskMsg *models.T
 		// Add duration if available
 		if result != nil && result.Duration != "" {
 			embed.Fields = append(embed.Fields, DiscordEmbedField{
-				Name: "Duration", Value: result.Duration, Inline: true,
+				Name: "Duration", Value: formatDuration(result.Duration), Inline: true,
 			})
 		}
 
@@ -222,7 +246,7 @@ func (d *DiscordNotifier) createPayload(step NotificationStep, taskMsg *models.T
 		// Add duration if available
 		if result != nil && result.Duration != "" {
 			embed.Fields = append(embed.Fields, DiscordEmbedField{
-				Name: "Duration", Value: result.Duration, Inline: true,
+				Name: "Duration", Value: formatDuration(result.Duration), Inline: true,
 			})
 		}
 
@@ -239,7 +263,7 @@ func (d *DiscordNotifier) createPayload(step NotificationStep, taskMsg *models.T
 		// Add duration if available
 		if result != nil && result.Duration != "" {
 			embed.Fields = append(embed.Fields, DiscordEmbedField{
-				Name: "Duration", Value: result.Duration, Inline: true,
+				Name: "Duration", Value: formatDuration(result.Duration), Inline: true,
 			})
 		}
 	}
