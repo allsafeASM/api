@@ -285,6 +285,12 @@ func (p *MessageProcessor) ProcessMessage(ctx context.Context, message *azservic
 
 // processMessageWithRenewal processes a message with automatic lock renewal
 func (p *MessageProcessor) processMessageWithRenewal(ctx context.Context, message *azservicebus.ReceivedMessage, handler func(context.Context, *models.TaskMessage) *models.MessageProcessingResult, lockRenewalInterval time.Duration, maxLockRenewalTime time.Duration) *models.MessageProcessingResult {
+	// Validate lock renewal interval (should be at least 1 second to avoid overwhelming the service)
+	if lockRenewalInterval < time.Second {
+		gologger.Warning().Msgf("Lock renewal interval too short (%v), using minimum of 1 second", lockRenewalInterval)
+		lockRenewalInterval = time.Second
+	}
+
 	// Parse the message first
 	var taskMsg models.TaskMessage
 	if err := json.Unmarshal(message.Body, &taskMsg); err != nil {
@@ -295,34 +301,43 @@ func (p *MessageProcessor) processMessageWithRenewal(ctx context.Context, messag
 		}
 	}
 
+	// Create a context with timeout for the entire operation
+	operationCtx, cancelOperation := context.WithTimeout(ctx, maxLockRenewalTime)
+	defer cancelOperation()
+
 	// Create a channel to signal completion
 	done := make(chan *models.MessageProcessingResult, 1)
+	renewalError := make(chan error, 1)
 
 	// Start the handler in a goroutine
 	go func() {
-		result := handler(ctx, &taskMsg)
+		result := handler(operationCtx, &taskMsg)
 		done <- result
 	}()
 
-	// Start lock renewal goroutine with maximum time limit
-	renewalCtx, cancelRenewal := context.WithTimeout(context.Background(), maxLockRenewalTime)
-	defer cancelRenewal()
-
+	// Start lock renewal goroutine
 	go func() {
 		ticker := time.NewTicker(lockRenewalInterval)
 		defer ticker.Stop()
 
+		// Renew lock immediately after receiving the message
+		if err := p.receiver.RenewMessageLock(operationCtx, message, nil); err != nil {
+			gologger.Warning().Msgf("Failed to renew message lock initially: %v", err)
+			renewalError <- err
+			return
+		}
+		gologger.Debug().Msg("Initial message lock renewal successful")
+
 		for {
 			select {
-			case <-renewalCtx.Done():
-				gologger.Debug().Msg("Lock renewal stopped due to timeout or cancellation")
+			case <-operationCtx.Done():
+				gologger.Debug().Msg("Lock renewal stopped due to operation completion or cancellation")
 				return
 			case <-ticker.C:
 				// Renew the message lock
-				if err := p.receiver.RenewMessageLock(ctx, message, nil); err != nil {
+				if err := p.receiver.RenewMessageLock(operationCtx, message, nil); err != nil {
 					gologger.Warning().Msgf("Failed to renew message lock: %v", err)
-					// If renewal fails, we should stop processing
-					cancelRenewal()
+					renewalError <- err
 					return
 				}
 				gologger.Debug().Msg("Message lock renewed successfully")
@@ -330,17 +345,23 @@ func (p *MessageProcessor) processMessageWithRenewal(ctx context.Context, messag
 		}
 	}()
 
-	// Wait for either completion or context cancellation
+	// Wait for either completion, context cancellation, or renewal error
 	select {
-	case <-ctx.Done():
-		cancelRenewal()
+	case <-operationCtx.Done():
 		return &models.MessageProcessingResult{
 			Success:   false,
-			Error:     ctx.Err(),
+			Error:     operationCtx.Err(),
 			Retryable: true, // Context cancellation is usually retryable
 		}
+	case err := <-renewalError:
+		// Cancel the operation if lock renewal fails
+		cancelOperation()
+		return &models.MessageProcessingResult{
+			Success:   false,
+			Error:     fmt.Errorf("lock renewal failed: %w", err),
+			Retryable: true, // Lock renewal failures are usually retryable
+		}
 	case result := <-done:
-		cancelRenewal()
 		return result
 	}
 }
