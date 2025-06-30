@@ -63,10 +63,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Pass tag to Azure deploy
-      - id: azure-tag
-        run: echo "tag=${{ steps.meta.outputs.tags }}" >> "$GITHUB_OUTPUT"
-
   # --- JOB 2: Call the Reusable Deploy Workflow ---
   # CHANGED: 'deploy' is now correctly indented at the same level as 'build-and-push'
   deploy:
