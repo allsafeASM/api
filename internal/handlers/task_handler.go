@@ -122,13 +122,12 @@ func (h *TaskHandler) processTask(ctx context.Context, taskMsg *models.TaskMessa
 			dnsxInput.Domain = subdomains[0]
 		}
 
+		gologger.Info().Msgf("DNSX input message: %+v", taskMsg)
+
 		// Add hosts file location if provided in the task message
 		if taskMsg.FilePath != "" {
 			dnsxInput.HostsFileLocation = taskMsg.FilePath
 			gologger.Info().Msgf("DNSX task with hosts file (file_path): %s", taskMsg.FilePath)
-		} else if taskMsg.HostsFileLocation != "" {
-			dnsxInput.HostsFileLocation = taskMsg.HostsFileLocation
-			gologger.Info().Msgf("DNSX task with hosts file (hosts_file_location): %s", taskMsg.HostsFileLocation)
 		} else {
 			gologger.Info().Msgf("DNSX task without hosts file, domain: %s", result.Domain)
 		}

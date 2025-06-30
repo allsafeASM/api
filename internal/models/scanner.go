@@ -84,8 +84,8 @@ func (r HttpxResult) GetDomain() string {
 // DNSXInput represents input for the dnsx scanner
 type DNSXInput struct {
 	Domain            string   `json:"domain"`
-	Subdomains        []string `json:"subdomains,omitempty"`          // List of subdomains to resolve
-	HostsFileLocation string   `json:"hosts_file_location,omitempty"` // The location of where the hosts file is located from blob storage
+	Subdomains        []string `json:"subdomains,omitempty"`      // List of subdomains to resolve
+	HostsFileLocation string   `json:"input_blob_path,omitempty"` // The location of where the hosts file is located from blob storage
 	// Future fields could include:
 	// RecordTypes []string `json:"record_types,omitempty"`
 	// Resolvers []string `json:"resolvers,omitempty"`
