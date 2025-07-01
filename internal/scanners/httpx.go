@@ -86,11 +86,12 @@ func (s *HttpxScanner) Execute(ctx context.Context, input interface{}) (models.S
 	doneCh := make(chan struct{})
 
 	options := runner.Options{
-		InputTargetHost: goflags.StringSlice{},
-		TechDetect:      true,
-		FollowRedirects: true,
-		Threads:         80,
-		Timeout:         10,
+		InputTargetHost:     goflags.StringSlice{},
+		TechDetect:          true,
+		FollowRedirects:     true,
+		FollowHostRedirects: true,
+		Threads:             80,
+		Timeout:             10,
 		OnResult: func(r runner.Result) {
 			if r.Err != nil {
 				gologger.Debug().Msgf("httpx probe failed for %s: %v", r.Input, r.Err)
