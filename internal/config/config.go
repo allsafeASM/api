@@ -20,6 +20,7 @@ type AppConfig struct {
 	ScannerTimeout      int // seconds
 	LockRenewalInterval int // seconds - how often to renew message locks
 	MaxLockRenewalTime  int // seconds - maximum time to keep renewing locks
+	WorkerCount         int // number of worker instances to run
 	// Notification settings
 	EnableNotifications bool
 	NotificationTimeout int // seconds - timeout for notification requests
@@ -48,6 +49,7 @@ func LoadAppConfig() AppConfig {
 		NotificationTimeout:        getEnvAsInt("NOTIFICATION_TIMEOUT", 30), // 30 seconds
 		EnableDiscordNotifications: getEnvAsBool("ENABLE_DISCORD_NOTIFICATIONS", true),
 		DiscordWebhookTimeout:      getEnvAsInt("DISCORD_WEBHOOK_TIMEOUT", 30), // 30 seconds
+		WorkerCount:                getEnvAsInt("WORKER_COUNT", 5),
 	}
 }
 
@@ -77,6 +79,7 @@ func (c *AppConfig) ValidateAppConfig() error {
 		{"POLL_INTERVAL", c.PollInterval, 1, 60, "Poll interval"},
 		{"LOCK_RENEWAL_INTERVAL", c.LockRenewalInterval, 10, 300, "Lock renewal interval"},
 		{"MAX_LOCK_RENEWAL_TIME", c.MaxLockRenewalTime, 60, 7200, "Max lock renewal time"},
+		{"WORKER_COUNT", c.WorkerCount, 1, 20, "Worker count"},
 	}
 
 	for _, v := range validations {
@@ -95,9 +98,13 @@ func (c *AppConfig) ValidateAppConfig() error {
 // validateRange validates that a value is within the specified range
 func validateRange(field string, value, min, max int, fieldName string) error {
 	if value < min || value > max {
+		message := fmt.Sprintf("%s must be between %d and %d", fieldName, min, max)
+		if fieldName != "Worker count" {
+			message += " seconds"
+		}
 		return &ConfigError{
 			Field:   field,
-			Message: fmt.Sprintf("%s must be between %d and %d seconds", fieldName, min, max),
+			Message: message,
 		}
 	}
 	return nil

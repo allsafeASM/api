@@ -157,6 +157,7 @@ func (app *Application) logConfiguration() {
 	gologger.Info().Msgf("  Log Level: %s", app.config.App.LogLevel)
 	gologger.Info().Msgf("  Scanner Timeout: %d seconds", app.config.App.ScannerTimeout)
 	gologger.Info().Msgf("  Poll Interval: %d seconds", app.config.App.PollInterval)
+	gologger.Info().Msgf("  Worker Count: %d", app.config.App.WorkerCount)
 	gologger.Info().Msgf("  Notifications Enabled: %t", app.config.App.EnableNotifications)
 	gologger.Info().Msgf("  Discord Notifications Enabled: %t", app.config.App.EnableDiscordNotifications)
 }
