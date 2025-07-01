@@ -88,15 +88,20 @@ func (s *HttpxScanner) Execute(ctx context.Context, input interface{}) (models.S
 	options := runner.Options{
 		InputTargetHost: goflags.StringSlice{},
 		TechDetect:      true,
+		FollowRedirects: true,
 		OnResult: func(r runner.Result) {
 			if r.Err != nil {
 				gologger.Debug().Msgf("httpx probe failed for %s: %v", r.Input, r.Err)
 				return
 			}
 			resultCh <- models.HttpxHostResult{
-				Host:         r.Input,
-				StatusCode:   r.StatusCode,
-				Technologies: r.Technologies,
+				Host:          r.Input,
+				StatusCode:    r.StatusCode,
+				Technologies:  r.Technologies,
+				ContentLength: r.ContentLength,
+				ContentType:   r.ContentType,
+				WebServer:     r.WebServer,
+				Title:         r.Title,
 			}
 		},
 	}

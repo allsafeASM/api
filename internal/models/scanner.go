@@ -70,9 +70,22 @@ func (h HttpxInput) GetScannerName() string {
 
 // HttpxHostResult represents the result for a single host in httpx
 type HttpxHostResult struct {
-	Host         string   `json:"host"`
-	StatusCode   int      `json:"status_code"`
-	Technologies []string `json:"technologies,omitempty"`
+	Host          string       `json:"host"`
+	StatusCode    int          `json:"status_code"`
+	Technologies  []string     `json:"technologies,omitempty"`
+	ContentLength int          `json:"content_length,omitempty"`
+	ContentType   string       `json:"content_type,omitempty"`
+	Server        string       `json:"server,omitempty"`
+	WebServer     string       `json:"web_server,omitempty"`
+	Title         string       `json:"title,omitempty"`
+	ASN           *AsnResponse `json:"asn,omitempty" csv:"asn" mapstructure:"asn"`
+}
+
+type AsnResponse struct {
+	AsNumber  string   `json:"as_number" csv:"as_number"`
+	AsName    string   `json:"as_name" csv:"as_name"`
+	AsCountry string   `json:"as_country" csv:"as_country"`
+	AsRange   []string `json:"as_range" csv:"as_range"`
 }
 
 // HttpxResult represents the result of an httpx scan
