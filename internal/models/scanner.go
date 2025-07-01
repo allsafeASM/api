@@ -52,7 +52,8 @@ func (r SubfinderResult) GetDomain() string {
 
 // HttpxInput represents input for the httpx scanner
 type HttpxInput struct {
-	Domain string `json:"domain"`
+	Domain            string `json:"domain"`
+	HostsFileLocation string `json:"input_blob_path,omitempty"` // The location of where the hosts file is located from blob storage
 	// Future fields could include:
 	// Ports []int `json:"ports,omitempty"`
 	// Threads int `json:"threads,omitempty"`
@@ -67,14 +68,21 @@ func (h HttpxInput) GetScannerName() string {
 	return "httpx"
 }
 
+// HttpxHostResult represents the result for a single host in httpx
+type HttpxHostResult struct {
+	Host         string   `json:"host"`
+	StatusCode   int      `json:"status_code"`
+	Technologies []string `json:"technologies,omitempty"`
+}
+
 // HttpxResult represents the result of an httpx scan
 type HttpxResult struct {
-	Domain string   `json:"domain"`
-	URLs   []string `json:"urls"`
+	Domain  string            `json:"domain"`
+	Results []HttpxHostResult `json:"output"`
 }
 
 func (r HttpxResult) GetCount() int {
-	return len(r.URLs)
+	return len(r.Results)
 }
 
 func (r HttpxResult) GetDomain() string {

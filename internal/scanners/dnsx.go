@@ -293,7 +293,7 @@ func (s *DNSXScanner) collectSubdomains(ctx context.Context, dnsxInput models.DN
 	// 2. Read subdomains from blob storage if HostsFileLocation is provided
 	if dnsxInput.HostsFileLocation != "" {
 		if s.blobClient == nil {
-			gologger.Warning().Msgf("Hosts file location provided (%s) but blob client is nil", dnsxInput.HostsFileLocation)
+			return nil, common.NewValidationError("blob_client", "hosts file location provided but blob client is not initialized")
 		} else {
 			blobSubdomains, err := s.readSubdomainsFromBlob(ctx, dnsxInput.HostsFileLocation)
 			if err != nil {

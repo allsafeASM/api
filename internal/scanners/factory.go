@@ -34,10 +34,14 @@ func NewScannerFactoryWithBlobClient(blobClient *azure.BlobStorageClient) *Scann
 	// Create Naabu scanner with blob client
 	naabuScanner := NewNaabuScanner(blobClient)
 
+	// Create Httpx scanner and set blob client
+	httpxScanner := NewHttpxScanner()
+	httpxScanner.SetBlobClient(blobClient)
+
 	return &ScannerFactory{
 		scanners: map[models.Task]models.Scanner{
 			models.TaskSubfinder:  NewSubfinderScanner(),
-			models.TaskHttpx:      NewHttpxScanner(),
+			models.TaskHttpx:      httpxScanner,
 			models.TaskDNSResolve: dnsxScanner,
 			models.TaskNaabu:      naabuScanner,
 		},

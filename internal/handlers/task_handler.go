@@ -112,7 +112,14 @@ func (h *TaskHandler) processTask(ctx context.Context, taskMsg *models.TaskMessa
 	case models.TaskSubfinder:
 		scannerInput = models.SubfinderInput{Domain: result.Domain}
 	case models.TaskHttpx:
-		scannerInput = models.HttpxInput{Domain: result.Domain}
+		httpxInput := models.HttpxInput{Domain: result.Domain}
+		if taskMsg.FilePath != "" {
+			httpxInput.HostsFileLocation = taskMsg.FilePath
+			gologger.Info().Msgf("Httpx task with hosts file (file_path): %s", taskMsg.FilePath)
+		} else {
+			gologger.Info().Msgf("Httpx task without hosts file, domain: %s", result.Domain)
+		}
+		scannerInput = httpxInput
 	case models.TaskDNSResolve:
 		// For DNSX, we can process either a single domain or multiple subdomains
 		// Use the utility function to properly parse subdomains from the input
