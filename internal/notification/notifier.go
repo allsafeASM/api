@@ -63,7 +63,6 @@ func NewConfiguredNotifier(enableNotifications bool) (*Notifier, error) {
 		return nil, fmt.Errorf("failed to initialize notification service: %w", err)
 	}
 
-	gologger.Info().Msg("Notification service initialized successfully")
 	return notifier, nil
 }
 

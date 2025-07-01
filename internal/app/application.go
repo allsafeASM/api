@@ -62,16 +62,11 @@ func (app *Application) initialize() error {
 	// Create context for graceful shutdown
 	app.ctx, app.cancel = context.WithCancel(context.Background())
 
-	// Log configuration
-	app.logConfiguration()
-
 	return nil
 }
 
 // setupLogging configures gologger based on the log level
 func (app *Application) setupLogging(logLevel string) {
-	gologger.Info().Msgf("Log level configured to: %s", logLevel)
-
 	// Map log levels to gologger levels
 	levelMap := map[string]levels.Level{
 		"debug":   levels.LevelDebug,
@@ -104,11 +99,8 @@ func (app *Application) initializeAzureClients() error {
 	}
 
 	// Perform a health check on the Service Bus connection
-	gologger.Info().Msg("Performing Service Bus health check...")
 	if err := app.serviceBusClient.HealthCheck(context.Background()); err != nil {
 		gologger.Warning().Msgf("Service Bus health check failed: %v", err)
-	} else {
-		gologger.Info().Msg("Service Bus health check passed")
 	}
 
 	// Initialize Blob Storage client
@@ -148,28 +140,12 @@ func (app *Application) initializeTaskHandler() error {
 	return nil
 }
 
-// logConfiguration logs the current application configuration
-func (app *Application) logConfiguration() {
-	gologger.Info().Msg("Starting AllSafe ASM worker with configuration:")
-	gologger.Info().Msgf("  Service Bus Namespace: %s", app.config.Azure.ServiceBusNamespace)
-	gologger.Info().Msgf("  Queue Name: %s", app.config.Azure.QueueName)
-	gologger.Info().Msgf("  Blob Container: %s", app.config.Azure.BlobContainerName)
-	gologger.Info().Msgf("  Log Level: %s", app.config.App.LogLevel)
-	gologger.Info().Msgf("  Scanner Timeout: %d seconds", app.config.App.ScannerTimeout)
-	gologger.Info().Msgf("  Poll Interval: %d seconds", app.config.App.PollInterval)
-	gologger.Info().Msgf("  Worker Count: %d", app.config.App.WorkerCount)
-	gologger.Info().Msgf("  Notifications Enabled: %t", app.config.App.EnableNotifications)
-	gologger.Info().Msgf("  Discord Notifications Enabled: %t", app.config.App.EnableDiscordNotifications)
-}
-
 // Start begins the application's main processing loop
-func (app *Application) Start() error {
-	app.logProcessingConfiguration()
-
+func (app *Application) Start(shutdownChan chan struct{}) error {
 	processingErr := make(chan error, 1)
 	go app.startMessageProcessing(processingErr)
 
-	return app.waitForShutdown(processingErr)
+	return app.waitForShutdown(processingErr, shutdownChan)
 }
 
 // startMessageProcessing begins processing messages from the queue
@@ -191,36 +167,28 @@ func (app *Application) startMessageProcessing(processingErr chan<- error) {
 	processingErr <- err
 }
 
-// logProcessingConfiguration logs the message processing configuration
-func (app *Application) logProcessingConfiguration() {
-	pollInterval := time.Duration(app.config.App.PollInterval) * time.Second
-	lockRenewalInterval := time.Duration(app.config.App.LockRenewalInterval) * time.Second
-	maxLockRenewalTime := time.Duration(app.config.App.MaxLockRenewalTime) * time.Second
-	scannerTimeout := time.Duration(app.config.App.ScannerTimeout) * time.Second
-
-	gologger.Info().Msgf("Starting message processing with poll interval: %v", pollInterval)
-	gologger.Info().Msgf("Lock renewal interval: %v, Max lock renewal time: %v", lockRenewalInterval, maxLockRenewalTime)
-	gologger.Info().Msgf("Scanner timeout per attempt: %v", scannerTimeout)
-}
-
 // waitForShutdown waits for shutdown signals and handles graceful shutdown
-func (app *Application) waitForShutdown(processingErr <-chan error) error {
+func (app *Application) waitForShutdown(processingErr <-chan error, shutdownChan chan struct{}) error {
 	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)
 
-	gologger.Info().Msg("Worker is running. Press Ctrl+C to exit.")
-
 	select {
 	case <-signalChannel:
-		return app.handleGracefulShutdown()
+		return app.handleGracefulShutdown(shutdownChan)
 	case err := <-processingErr:
 		return err
 	}
 }
 
 // handleGracefulShutdown performs graceful shutdown of the application
-func (app *Application) handleGracefulShutdown() error {
-	gologger.Info().Msg("Shutting down application gracefully...")
+func (app *Application) handleGracefulShutdown(shutdownChan chan struct{}) error {
+	// Only print shutdown message once
+	select {
+	case shutdownChan <- struct{}{}:
+		gologger.Info().Msg("Shutting down gracefully...")
+	default:
+		// Another worker already printed the message
+	}
 
 	// Cancel the main context to stop all goroutines
 	app.cancel()
@@ -230,6 +198,13 @@ func (app *Application) handleGracefulShutdown() error {
 		app.serviceBusClient.Close(context.Background())
 	}
 
-	gologger.Info().Msg("Application shutdown complete")
+	// Only print completion message once
+	select {
+	case shutdownChan <- struct{}{}:
+		gologger.Info().Msg("Shutdown complete")
+	default:
+		// Another worker already printed the message
+	}
+
 	return nil
 }

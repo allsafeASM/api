@@ -21,8 +21,6 @@ type ServiceBusClient struct {
 
 // NewServiceBusClient creates a new Service Bus client
 func NewServiceBusClient(connectionString, queueName string) (*ServiceBusClient, error) {
-	gologger.Info().Msgf("Creating Service Bus client for queue: %s", queueName)
-
 	// Create client with options for better resilience
 	client, err := azservicebus.NewClientFromConnectionString(connectionString, &azservicebus.ClientOptions{
 		RetryOptions: azservicebus.RetryOptions{
@@ -42,8 +40,6 @@ func NewServiceBusClient(connectionString, queueName string) (*ServiceBusClient,
 	if err != nil {
 		return nil, fmt.Errorf("failed to create receiver: %w", err)
 	}
-
-	gologger.Info().Msgf("Service Bus client created successfully for queue: %s", queueName)
 
 	return &ServiceBusClient{
 		client:   client,
@@ -88,8 +84,6 @@ func (s *ServiceBusClient) HealthCheck(ctx context.Context) error {
 
 // ProcessMessages continuously processes messages from the queue
 func (s *ServiceBusClient) ProcessMessages(ctx context.Context, handler func(context.Context, *models.TaskMessage) *models.MessageProcessingResult, pollInterval time.Duration, lockRenewalInterval time.Duration, maxLockRenewalTime time.Duration, scannerTimeout time.Duration) error {
-	gologger.Info().Msgf("Starting message processing for queue: %s", s.queue)
-
 	for {
 		select {
 		case <-ctx.Done():

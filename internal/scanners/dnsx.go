@@ -2,6 +2,7 @@ package scanners
 
 import (
 	"context"
+	"hash/fnv"
 	"strings"
 	"sync"
 	"time"
@@ -12,32 +13,91 @@ import (
 	"github.com/allsafeASM/api/internal/utils"
 	"github.com/projectdiscovery/dnsx/libs/dnsx"
 	"github.com/projectdiscovery/gologger"
-	"github.com/projectdiscovery/hmap/store/hybrid"
 	"github.com/projectdiscovery/ratelimit"
 	"github.com/projectdiscovery/retryabledns"
 )
+
+// ShardedResultMap provides thread-safe access to results with reduced contention
+type ShardedResultMap struct {
+	shards []*ResultShard
+	count  int
+}
+
+// ResultShard represents a single shard of the result map
+type ResultShard struct {
+	mu      sync.RWMutex
+	records map[string]models.ResolutionInfo
+}
+
+// NewShardedResultMap creates a new sharded result map
+func NewShardedResultMap(shardCount int) *ShardedResultMap {
+	shards := make([]*ResultShard, shardCount)
+	for i := 0; i < shardCount; i++ {
+		shards[i] = &ResultShard{
+			records: make(map[string]models.ResolutionInfo),
+		}
+	}
+	return &ShardedResultMap{
+		shards: shards,
+		count:  shardCount,
+	}
+}
+
+// Set stores a result in the appropriate shard
+func (s *ShardedResultMap) Set(domain string, result models.ResolutionInfo) {
+	shard := s.shards[hashString(domain)%s.count]
+	shard.mu.Lock()
+	shard.records[domain] = result
+	shard.mu.Unlock()
+}
+
+// GetAll returns all results from all shards
+func (s *ShardedResultMap) GetAll() map[string]models.ResolutionInfo {
+	result := make(map[string]models.ResolutionInfo)
+	for _, shard := range s.shards {
+		shard.mu.RLock()
+		for domain, resolution := range shard.records {
+			result[domain] = resolution
+		}
+		shard.mu.RUnlock()
+	}
+	return result
+}
+
+// hashString provides a simple hash function for domain distribution
+func hashString(s string) int {
+	h := fnv.New32a()
+	h.Write([]byte(s))
+	return int(h.Sum32())
+}
 
 // DNSXScanner implements the Scanner interface for dnsx
 type DNSXScanner struct {
 	*BaseScanner
 	blobClient *azure.BlobStorageClient
 
-	// ProjectDiscovery-inspired optimizations
-	dnsClient  *dnsx.DNSX
+	// Optimized components
+	dnsClient   *dnsx.DNSX
+	clientOnce  sync.Once
+	clientMutex sync.RWMutex
+
+	// Worker management
 	workerChan chan string
 	resultChan chan struct {
 		domain string
 		result models.ResolutionInfo
 	}
-	wgWorkers   *sync.WaitGroup
-	wgResults   *sync.WaitGroup
-	limiter     *ratelimit.Limiter
-	hybridMap   *hybrid.HybridMap
+	wgWorkers *sync.WaitGroup
+	wgResults *sync.WaitGroup
+	limiter   *ratelimit.Limiter
+
+	// Configuration
 	workerCount int
 	rateLimit   int
+	shardCount  int
 }
 
-// NewDNSXScanner creates a new dnsx scanner
+// NewDNSXScanner creates a new dnsx scanner with optimized defaults
 func NewDNSXScanner() *DNSXScanner {
 	return &DNSXScanner{
 		BaseScanner: NewBaseScanner(),
@@ -45,6 +105,7 @@ func NewDNSXScanner() *DNSXScanner {
 		wgResults:   &sync.WaitGroup{},
 		workerCount: 50,   // Default worker count
 		rateLimit:   1000, // Default rate limit per second
+		shardCount:  16,   // Number of shards for result map
 	}
 }
 
@@ -80,11 +141,10 @@ func (s *DNSXScanner) Execute(ctx context.Context, input interface{}) (models.Sc
 	gologger.Info().Msgf("DNSX starting with domain: %s, subdomains count: %d, hosts file: %s",
 		dnsxInput.Domain, len(dnsxInput.Subdomains), dnsxInput.HostsFileLocation)
 
-	// Initialize ProjectDiscovery-inspired components
+	// Initialize optimized components
 	if err := s.initializeComponents(); err != nil {
 		return nil, err
 	}
-	defer s.cleanup()
 
 	// Check if context is cancelled
 	select {
@@ -99,7 +159,7 @@ func (s *DNSXScanner) Execute(ctx context.Context, input interface{}) (models.Sc
 		return nil, err
 	}
 
-	// Process DNS resolution with ProjectDiscovery-inspired optimizations
+	// Process DNS resolution with optimizations
 	records := s.processDNSResolutionOptimized(ctx, subdomainsToProcess)
 
 	// Determine result domain
@@ -114,48 +174,55 @@ func (s *DNSXScanner) Execute(ctx context.Context, input interface{}) (models.Sc
 	}, nil
 }
 
-// initializeComponents initializes all ProjectDiscovery-inspired components
+// initializeComponents initializes all optimized components
 func (s *DNSXScanner) initializeComponents() error {
-	// Create optimized DNSX client
-	dnsClient, err := s.createOptimizedDNSXClient()
-	if err != nil {
+	// Get or create DNS client (connection pooling)
+	if _, err := s.getDNSClient(); err != nil {
 		return err
 	}
-	s.dnsClient = dnsClient
-
-	// Initialize hybrid map for efficient storage
-	hm, err := hybrid.New(hybrid.DefaultDiskOptions)
-	if err != nil {
-		return err
-	}
-	s.hybridMap = hm
 
 	// Initialize rate limiter
 	s.limiter = ratelimit.New(context.Background(), uint(s.rateLimit), time.Second)
 
-	// Initialize channels
-	s.workerChan = make(chan string, s.workerCount*2)
-	s.resultChan = make(chan struct {
-		domain string
-		result models.ResolutionInfo
-	}, s.workerCount*2)
+	// Initialize channels with dynamic sizing (will be set in processDNSResolutionOptimized)
+	s.workerChan = nil
+	s.resultChan = nil
 
 	return nil
 }
 
-// cleanup cleans up resources
-func (s *DNSXScanner) cleanup() {
-	if s.hybridMap != nil {
-		s.hybridMap.Close()
+// getDNSClient implements connection pooling for DNS client
+func (s *DNSXScanner) getDNSClient() (*dnsx.DNSX, error) {
+	s.clientMutex.RLock()
+	if s.dnsClient != nil {
+		defer s.clientMutex.RUnlock()
+		return s.dnsClient, nil
 	}
+	s.clientMutex.RUnlock()
+
+	s.clientMutex.Lock()
+	defer s.clientMutex.Unlock()
+
+	// Double-check after acquiring write lock
+	if s.dnsClient != nil {
+		return s.dnsClient, nil
+	}
+
+	// Create new DNS client
+	dnsClient, err := s.createOptimizedDNSXClient()
+	if err != nil {
+		return nil, err
+	}
+	s.dnsClient = dnsClient
+	return s.dnsClient, nil
 }
 
-// createOptimizedDNSXClient creates a new DNSX client with ProjectDiscovery-inspired optimizations
+// createOptimizedDNSXClient creates a new DNSX client with enhanced optimizations
 func (s *DNSXScanner) createOptimizedDNSXClient() (*dnsx.DNSX, error) {
 	// Use ProjectDiscovery's default options as base
 	dnsxOptions := dnsx.DefaultOptions
 
-	// Optimize for bulk processing
+	// Enhanced resolver configuration for better performance
 	dnsxOptions.BaseResolvers = []string{
 		"udp:1.1.1.1:53",         // Cloudflare
 		"udp:1.0.0.1:53",         // Cloudflare
@@ -165,8 +232,12 @@ func (s *DNSXScanner) createOptimizedDNSXClient() (*dnsx.DNSX, error) {
 		"udp:149.112.112.112:53", // Quad9
 		"udp:208.67.222.222:53",  // OpenDNS
 		"udp:208.67.220.220:53",  // OpenDNS
+		"udp:94.140.14.14:53",    // AdGuard
+		"udp:94.140.15.15:53",    // AdGuard
 	}
-	dnsxOptions.MaxRetries = 2
+
+	// Optimized settings for bulk processing
+	dnsxOptions.MaxRetries = 1                 // Reduced for speed
 	dnsxOptions.QuestionTypes = []uint16{1, 5} // A, CNAME only
 	dnsxOptions.Hostsfile = true
 	dnsxOptions.QueryAll = false // Disable for speed
@@ -176,6 +247,21 @@ func (s *DNSXScanner) createOptimizedDNSXClient() (*dnsx.DNSX, error) {
 		return nil, common.NewScannerError("failed to create DNSX client", err)
 	}
 	return dnsClient, nil
+}
+
+// calculateBufferSizes calculates optimal buffer sizes based on workload
+func (s *DNSXScanner) calculateBufferSizes(subdomainCount int) (int, int) {
+	workerBuffer := min(subdomainCount, s.workerCount*4)
+	resultBuffer := min(subdomainCount, s.workerCount*2)
+	return workerBuffer, resultBuffer
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // collectSubdomains collects subdomains from different sources
@@ -226,20 +312,27 @@ func (s *DNSXScanner) readSubdomainsFromBlob(ctx context.Context, hostsFileLocat
 	return utils.ReadSubdomainsFromString(hostsFileContent), nil
 }
 
-// processDNSResolutionOptimized processes DNS resolution using ProjectDiscovery-inspired optimizations
+// processDNSResolutionOptimized processes DNS resolution using enhanced optimizations
 func (s *DNSXScanner) processDNSResolutionOptimized(ctx context.Context, subdomains []string) map[string]models.ResolutionInfo {
-	// Pre-allocate result map
-	records := make(map[string]models.ResolutionInfo, len(subdomains))
-	var mu sync.RWMutex
+	// Calculate optimal buffer sizes
+	workerBuffer, resultBuffer := s.calculateBufferSizes(len(subdomains))
+
+	// Initialize channels with optimal buffer sizes
+	s.workerChan = make(chan string, workerBuffer)
+	s.resultChan = make(chan struct {
+		domain string
+		result models.ResolutionInfo
+	}, resultBuffer)
+
+	// Use sharded result map for better concurrency
+	shardedResults := NewShardedResultMap(s.shardCount)
 
 	// Start result collector
 	s.wgResults.Add(1)
 	go func() {
 		defer s.wgResults.Done()
 		for result := range s.resultChan {
-			mu.Lock()
-			records[result.domain] = result.result
-			mu.Unlock()
+			shardedResults.Set(result.domain, result.result)
 		}
 	}()
 
@@ -266,10 +359,10 @@ func (s *DNSXScanner) processDNSResolutionOptimized(ctx context.Context, subdoma
 	close(s.resultChan)
 	s.wgResults.Wait()
 
-	return records
+	return shardedResults.GetAll()
 }
 
-// worker is the main worker function inspired by ProjectDiscovery's pattern
+// worker is the optimized worker function
 func (s *DNSXScanner) worker(ctx context.Context) {
 	defer s.wgWorkers.Done()
 
@@ -290,7 +383,7 @@ func (s *DNSXScanner) worker(ctx context.Context) {
 		// Apply rate limiting
 		s.limiter.Take()
 
-		// Perform DNS lookup using ProjectDiscovery's pattern
+		// Perform DNS lookup using optimized pattern
 		resolutionInfo := s.performOptimizedDNSLookup(cleanSubdomain)
 
 		// Send result
@@ -305,14 +398,21 @@ func (s *DNSXScanner) worker(ctx context.Context) {
 	}
 }
 
-// performOptimizedDNSLookup performs DNS lookup using ProjectDiscovery's optimized pattern
+// performOptimizedDNSLookup performs DNS lookup using optimized pattern
 func (s *DNSXScanner) performOptimizedDNSLookup(subdomain string) models.ResolutionInfo {
 	resolutionInfo := models.ResolutionInfo{
 		Status: "resolved",
 	}
 
+	// Get DNS client from pool
+	dnsClient, err := s.getDNSClient()
+	if err != nil {
+		resolutionInfo.Status = "error"
+		return resolutionInfo
+	}
+
 	// Use QueryMultiple like ProjectDiscovery does
-	dnsData, err := s.dnsClient.QueryMultiple(subdomain)
+	dnsData, err := dnsClient.QueryMultiple(subdomain)
 	if err != nil {
 		resolutionInfo.Status = "error"
 		return resolutionInfo

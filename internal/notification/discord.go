@@ -135,11 +135,9 @@ func NewConfiguredDiscordNotifier(enableDiscordNotifications bool) (*DiscordNoti
 	}
 
 	if !discordNotifier.IsEnabled() {
-		gologger.Info().Msg("Discord webhook URL not provided, Discord notifications disabled")
 		return nil, nil // Not an error, just disabled
 	}
 
-	gologger.Info().Msg("Discord notification service initialized successfully")
 	return discordNotifier, nil
 }
 
