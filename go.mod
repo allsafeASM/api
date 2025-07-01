@@ -8,7 +8,9 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/projectdiscovery/dnsx v1.2.2
 	github.com/projectdiscovery/gologger v1.1.54
+	github.com/projectdiscovery/hmap v0.0.89
 	github.com/projectdiscovery/naabu/v2 v2.3.4
+	github.com/projectdiscovery/ratelimit v0.0.81
 	github.com/projectdiscovery/retryabledns v1.0.101
 	github.com/projectdiscovery/subfinder/v2 v2.8.0
 )
@@ -88,12 +90,10 @@ require (
 	github.com/projectdiscovery/fastdialer v0.4.1 // indirect
 	github.com/projectdiscovery/freeport v0.0.7 // indirect
 	github.com/projectdiscovery/goflags v0.1.74 // indirect
-	github.com/projectdiscovery/hmap v0.0.89 // indirect
 	github.com/projectdiscovery/ipranger v0.0.53 // indirect
 	github.com/projectdiscovery/machineid v0.0.0-20240226150047-2e2c51e35983 // indirect
 	github.com/projectdiscovery/mapcidr v1.1.34 // indirect
 	github.com/projectdiscovery/networkpolicy v0.1.15 // indirect
-	github.com/projectdiscovery/ratelimit v0.0.81 // indirect
 	github.com/projectdiscovery/retryablehttp-go v1.0.114 // indirect
 	github.com/projectdiscovery/uncover v1.0.9 // indirect
 	github.com/projectdiscovery/utils v0.4.20 // indirect

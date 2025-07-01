@@ -3,6 +3,8 @@ package scanners
 import (
 	"context"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/allsafeASM/api/internal/azure"
 	"github.com/allsafeASM/api/internal/common"
@@ -10,6 +12,8 @@ import (
 	"github.com/allsafeASM/api/internal/utils"
 	"github.com/projectdiscovery/dnsx/libs/dnsx"
 	"github.com/projectdiscovery/gologger"
+	"github.com/projectdiscovery/hmap/store/hybrid"
+	"github.com/projectdiscovery/ratelimit"
 	"github.com/projectdiscovery/retryabledns"
 )
 
@@ -17,12 +21,30 @@ import (
 type DNSXScanner struct {
 	*BaseScanner
 	blobClient *azure.BlobStorageClient
+
+	// ProjectDiscovery-inspired optimizations
+	dnsClient  *dnsx.DNSX
+	workerChan chan string
+	resultChan chan struct {
+		domain string
+		result models.ResolutionInfo
+	}
+	wgWorkers   *sync.WaitGroup
+	wgResults   *sync.WaitGroup
+	limiter     *ratelimit.Limiter
+	hybridMap   *hybrid.HybridMap
+	workerCount int
+	rateLimit   int
 }
 
 // NewDNSXScanner creates a new dnsx scanner
 func NewDNSXScanner() *DNSXScanner {
 	return &DNSXScanner{
 		BaseScanner: NewBaseScanner(),
+		wgWorkers:   &sync.WaitGroup{},
+		wgResults:   &sync.WaitGroup{},
+		workerCount: 50,   // Default worker count
+		rateLimit:   1000, // Default rate limit per second
 	}
 }
 
@@ -58,11 +80,11 @@ func (s *DNSXScanner) Execute(ctx context.Context, input interface{}) (models.Sc
 	gologger.Info().Msgf("DNSX starting with domain: %s, subdomains count: %d, hosts file: %s",
 		dnsxInput.Domain, len(dnsxInput.Subdomains), dnsxInput.HostsFileLocation)
 
-	// Create DNSX instance with optimized settings for bulk processing
-	dnsClient, err := s.createDNSXClient()
-	if err != nil {
+	// Initialize ProjectDiscovery-inspired components
+	if err := s.initializeComponents(); err != nil {
 		return nil, err
 	}
+	defer s.cleanup()
 
 	// Check if context is cancelled
 	select {
@@ -77,8 +99,8 @@ func (s *DNSXScanner) Execute(ctx context.Context, input interface{}) (models.Sc
 		return nil, err
 	}
 
-	// Process DNS resolution
-	records := s.processDNSResolution(ctx, dnsClient, subdomainsToProcess)
+	// Process DNS resolution with ProjectDiscovery-inspired optimizations
+	records := s.processDNSResolutionOptimized(ctx, subdomainsToProcess)
 
 	// Determine result domain
 	resultDomain := s.determineResultDomain(dnsxInput, subdomainsToProcess)
@@ -92,19 +114,64 @@ func (s *DNSXScanner) Execute(ctx context.Context, input interface{}) (models.Sc
 	}, nil
 }
 
-// createDNSXClient creates a new DNSX client with optimized settings
-func (s *DNSXScanner) createDNSXClient() (*dnsx.DNSX, error) {
-	dnsClient, err := dnsx.New(dnsx.Options{
-		BaseResolvers: []string{
-			"udp:8.8.8.8:53",
-			"udp:8.8.4.4:53",
-			"udp:1.1.1.1:53",
-			"udp:1.0.0.1:53",
-		},
-		MaxRetries:    3,
-		QuestionTypes: []uint16{1, 5}, // A, CNAME only
-		Hostsfile:     true,
-	})
+// initializeComponents initializes all ProjectDiscovery-inspired components
+func (s *DNSXScanner) initializeComponents() error {
+	// Create optimized DNSX client
+	dnsClient, err := s.createOptimizedDNSXClient()
+	if err != nil {
+		return err
+	}
+	s.dnsClient = dnsClient
+
+	// Initialize hybrid map for efficient storage
+	hm, err := hybrid.New(hybrid.DefaultDiskOptions)
+	if err != nil {
+		return err
+	}
+	s.hybridMap = hm
+
+	// Initialize rate limiter
+	s.limiter = ratelimit.New(context.Background(), uint(s.rateLimit), time.Second)
+
+	// Initialize channels
+	s.workerChan = make(chan string, s.workerCount*2)
+	s.resultChan = make(chan struct {
+		domain string
+		result models.ResolutionInfo
+	}, s.workerCount*2)
+
+	return nil
+}
+
+// cleanup cleans up resources
+func (s *DNSXScanner) cleanup() {
+	if s.hybridMap != nil {
+		s.hybridMap.Close()
+	}
+}
+
+// createOptimizedDNSXClient creates a new DNSX client with ProjectDiscovery-inspired optimizations
+func (s *DNSXScanner) createOptimizedDNSXClient() (*dnsx.DNSX, error) {
+	// Use ProjectDiscovery's default options as base
+	dnsxOptions := dnsx.DefaultOptions
+
+	// Optimize for bulk processing
+	dnsxOptions.BaseResolvers = []string{
+		"udp:1.1.1.1:53",         // Cloudflare
+		"udp:1.0.0.1:53",         // Cloudflare
+		"udp:8.8.8.8:53",         // Google
+		"udp:8.8.4.4:53",         // Google
+		"udp:9.9.9.9:53",         // Quad9
+		"udp:149.112.112.112:53", // Quad9
+		"udp:208.67.222.222:53",  // OpenDNS
+		"udp:208.67.220.220:53",  // OpenDNS
+	}
+	dnsxOptions.MaxRetries = 2
+	dnsxOptions.QuestionTypes = []uint16{1, 5} // A, CNAME only
+	dnsxOptions.Hostsfile = true
+	dnsxOptions.QueryAll = false // Disable for speed
+
+	dnsClient, err := dnsx.New(dnsxOptions)
 	if err != nil {
 		return nil, common.NewScannerError("failed to create DNSX client", err)
 	}
@@ -159,16 +226,58 @@ func (s *DNSXScanner) readSubdomainsFromBlob(ctx context.Context, hostsFileLocat
 	return utils.ReadSubdomainsFromString(hostsFileContent), nil
 }
 
-// processDNSResolution processes DNS resolution for all subdomains
-func (s *DNSXScanner) processDNSResolution(ctx context.Context, dnsClient *dnsx.DNSX, subdomains []string) map[string]models.ResolutionInfo {
-	records := make(map[string]models.ResolutionInfo)
+// processDNSResolutionOptimized processes DNS resolution using ProjectDiscovery-inspired optimizations
+func (s *DNSXScanner) processDNSResolutionOptimized(ctx context.Context, subdomains []string) map[string]models.ResolutionInfo {
+	// Pre-allocate result map
+	records := make(map[string]models.ResolutionInfo, len(subdomains))
+	var mu sync.RWMutex
 
-	for i, subdomain := range subdomains {
-		// Check context cancellation for each iteration
+	// Start result collector
+	s.wgResults.Add(1)
+	go func() {
+		defer s.wgResults.Done()
+		for result := range s.resultChan {
+			mu.Lock()
+			records[result.domain] = result.result
+			mu.Unlock()
+		}
+	}()
+
+	// Start workers
+	for i := 0; i < s.workerCount; i++ {
+		s.wgWorkers.Add(1)
+		go s.worker(ctx)
+	}
+
+	// Send work to workers
+	go func() {
+		defer close(s.workerChan)
+		for _, subdomain := range subdomains {
+			select {
+			case s.workerChan <- subdomain:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	// Wait for all workers to complete
+	s.wgWorkers.Wait()
+	close(s.resultChan)
+	s.wgResults.Wait()
+
+	return records
+}
+
+// worker is the main worker function inspired by ProjectDiscovery's pattern
+func (s *DNSXScanner) worker(ctx context.Context) {
+	defer s.wgWorkers.Done()
+
+	for subdomain := range s.workerChan {
+		// Check context cancellation
 		select {
 		case <-ctx.Done():
-			gologger.Warning().Msg("DNSX processing cancelled due to context timeout")
-			return records
+			return
 		default:
 		}
 
@@ -178,52 +287,62 @@ func (s *DNSXScanner) processDNSResolution(ctx context.Context, dnsClient *dnsx.
 			continue
 		}
 
-		gologger.Debug().Msgf("Processing subdomain %d/%d: %s", i+1, len(subdomains), cleanSubdomain)
+		// Apply rate limiting
+		s.limiter.Take()
 
-		// Perform DNS lookup
-		resolutionInfo := s.performDNSLookup(dnsClient, cleanSubdomain)
-		records[cleanSubdomain] = resolutionInfo
+		// Perform DNS lookup using ProjectDiscovery's pattern
+		resolutionInfo := s.performOptimizedDNSLookup(cleanSubdomain)
+
+		// Send result
+		select {
+		case s.resultChan <- struct {
+			domain string
+			result models.ResolutionInfo
+		}{cleanSubdomain, resolutionInfo}:
+		case <-ctx.Done():
+			return
+		}
 	}
-
-	return records
 }
 
-// performDNSLookup performs DNS lookup for a single subdomain
-func (s *DNSXScanner) performDNSLookup(dnsClient *dnsx.DNSX, subdomain string) models.ResolutionInfo {
+// performOptimizedDNSLookup performs DNS lookup using ProjectDiscovery's optimized pattern
+func (s *DNSXScanner) performOptimizedDNSLookup(subdomain string) models.ResolutionInfo {
 	resolutionInfo := models.ResolutionInfo{
 		Status: "resolved",
 	}
 
-	// Use QueryMultiple to get all record types at once
-	dnsData, err := dnsClient.QueryMultiple(subdomain)
+	// Use QueryMultiple like ProjectDiscovery does
+	dnsData, err := s.dnsClient.QueryMultiple(subdomain)
 	if err != nil {
-		gologger.Warning().Msgf("DNS lookup failed for %s: %v", subdomain, err)
 		resolutionInfo.Status = "error"
 		return resolutionInfo
 	}
 
-	// Extract different record types from the DNS data
-	s.extractDNSRecords(&resolutionInfo, dnsData, subdomain)
+	// Skip nil responses (ProjectDiscovery pattern)
+	if dnsData == nil {
+		resolutionInfo.Status = "error"
+		return resolutionInfo
+	}
 
-	// If no records found at all, mark as not resolved
+	// Extract DNS records
+	s.extractDNSRecords(&resolutionInfo, dnsData)
+
+	// If no records found, mark as not resolved
 	if s.hasNoRecords(resolutionInfo) {
 		resolutionInfo.Status = "not_resolved"
-		gologger.Debug().Msgf("No DNS records found for %s", subdomain)
 	}
 
 	return resolutionInfo
 }
 
 // extractDNSRecords extracts DNS records from DNSX data
-func (s *DNSXScanner) extractDNSRecords(resolutionInfo *models.ResolutionInfo, dnsData *retryabledns.DNSData, subdomain string) {
+func (s *DNSXScanner) extractDNSRecords(resolutionInfo *models.ResolutionInfo, dnsData *retryabledns.DNSData) {
 	if len(dnsData.A) > 0 {
 		resolutionInfo.A = dnsData.A
-		gologger.Debug().Msgf("A records for %s: %v", subdomain, dnsData.A)
 	}
 
 	if len(dnsData.CNAME) > 0 {
 		resolutionInfo.CNAME = dnsData.CNAME
-		gologger.Debug().Msgf("CNAME records for %s: %v", subdomain, dnsData.CNAME)
 	}
 }
 

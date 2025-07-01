@@ -164,21 +164,23 @@ func (h *TaskHandler) processTask(ctx context.Context, taskMsg *models.TaskMessa
 					naabuInput.TopPorts = v
 				case float64:
 					// Convert numeric values to string format that naabu expects
-					if v == 100 {
+					switch v {
+					case 100:
 						naabuInput.TopPorts = "100"
-					} else if v == 1000 {
+					case 1000:
 						naabuInput.TopPorts = "1000"
-					} else {
+					default:
 						gologger.Warning().Msgf("Invalid top_ports numeric value: %.0f (must be 100 or 1000), using default", v)
 						naabuInput.TopPorts = "100" // Default fallback
 					}
 				case int:
 					// Convert numeric values to string format that naabu expects
-					if v == 100 {
+					switch v {
+					case 100:
 						naabuInput.TopPorts = "100"
-					} else if v == 1000 {
+					case 1000:
 						naabuInput.TopPorts = "1000"
-					} else {
+					default:
 						gologger.Warning().Msgf("Invalid top_ports numeric value: %d (must be 100 or 1000), using default", v)
 						naabuInput.TopPorts = "100" // Default fallback
 					}
