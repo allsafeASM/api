@@ -41,7 +41,7 @@ func TestDiscordNotifier_CreatePayload(t *testing.T) {
 	taskMsg := &models.TaskMessage{
 		Task:       "subfinder",
 		Domain:     "example.com",
-		ScanID:     "test-scan-123",
+		ScanID:     123,
 		InstanceID: "test-instance-456",
 	}
 
@@ -51,7 +51,7 @@ func TestDiscordNotifier_CreatePayload(t *testing.T) {
 	}
 
 	result := &models.TaskResult{
-		ScanID:    "test-scan-123",
+		ScanID:    123,
 		Task:      "subfinder",
 		Domain:    "example.com",
 		Status:    "completed",
@@ -99,12 +99,12 @@ func TestDiscordNotifier_NotifyMethods(t *testing.T) {
 	taskMsg := &models.TaskMessage{
 		Task:       "subfinder",
 		Domain:     "example.com",
-		ScanID:     "test-scan-123",
+		ScanID:     123,
 		InstanceID: "test-instance-456",
 	}
 
 	result := &models.TaskResult{
-		ScanID:    "test-scan-123",
+		ScanID:    123,
 		Task:      "subfinder",
 		Domain:    "example.com",
 		Status:    "completed",

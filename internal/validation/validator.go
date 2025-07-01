@@ -54,7 +54,7 @@ func (v *Validator) ValidateTaskMessage(taskMsg *models.TaskMessage) error {
 		return err
 	}
 
-	if taskMsg.ScanID == "" {
+	if taskMsg.ScanID == 0 {
 		return fmt.Errorf("scan_id is required")
 	}
 

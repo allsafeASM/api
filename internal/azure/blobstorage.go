@@ -36,7 +36,7 @@ func NewBlobStorageClient(connectionString, containerName string) (*BlobStorageC
 func (b *BlobStorageClient) StoreTaskResult(ctx context.Context, result *models.TaskResult) error {
 	// Create a unique blob name using timestamp and task ID
 	randomID := uuid.New().String()
-	blobName := fmt.Sprintf("%s-%s/%s/out/%s.json", result.Domain, result.ScanID, result.Task, randomID)
+	blobName := fmt.Sprintf("%s-%d/%s/out/%s.json", result.Domain, result.ScanID, result.Task, randomID)
 
 	// Marshal the result to JSON
 	resultJSON, err := json.MarshalIndent(result, "", "  ")
@@ -99,9 +99,9 @@ func (b *BlobStorageClient) ReadHostsFileFromBlob(ctx context.Context, blobPath 
 }
 
 // StoreSubfinderTextResult stores a plain text file of subfinder subdomains in blob storage
-func (b *BlobStorageClient) StoreSubfinderTextResult(ctx context.Context, result *models.SubfinderResult, scanID string, task string) error {
+func (b *BlobStorageClient) StoreSubfinderTextResult(ctx context.Context, result *models.SubfinderResult, scanID int, task string) error {
 	randomID := uuid.New().String()
-	blobName := fmt.Sprintf("%s-%s/%s/out/%s.txt", result.Domain, scanID, task, randomID)
+	blobName := fmt.Sprintf("%s-%d/%s/out/%s.txt", result.Domain, scanID, task, randomID)
 	txtContent := strings.Join(result.Subdomains, "\n")
 
 	_, err := b.client.UploadBuffer(ctx, b.containerName, blobName, []byte(txtContent), &azblob.UploadBufferOptions{})

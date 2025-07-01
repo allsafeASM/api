@@ -21,7 +21,7 @@ type Notifier struct {
 
 // NotificationPayload represents the payload sent to the Azure Function
 type NotificationPayload struct {
-	ScanID    string                 `json:"scan_id"`
+	ScanID    int                    `json:"scan_id"`
 	Task      string                 `json:"task"`
 	Domain    string                 `json:"domain"`
 	Status    string                 `json:"status"`

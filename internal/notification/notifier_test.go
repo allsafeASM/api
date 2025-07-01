@@ -49,7 +49,7 @@ func TestNotificationPayload(t *testing.T) {
 	}
 
 	result := &models.TaskResult{
-		ScanID: "test-scan-123",
+		ScanID: 123,
 		Task:   models.TaskSubfinder,
 		Domain: "example.com",
 		Status: models.TaskStatusCompleted,
@@ -70,8 +70,8 @@ func TestNotificationPayload(t *testing.T) {
 		}
 	}
 
-	if payload.ScanID != "test-scan-123" {
-		t.Errorf("Expected ScanID to be 'test-scan-123', got %s", payload.ScanID)
+	if payload.ScanID != 123 {
+		t.Errorf("Expected ScanID to be 123, got %v", payload.ScanID)
 	}
 
 	if payload.Task != "subfinder" {
@@ -106,7 +106,7 @@ func TestNotifyCompletionWithRetry(t *testing.T) {
 	}
 
 	result := &models.TaskResult{
-		ScanID:    "test-scan-123",
+		ScanID:    123,
 		Task:      models.TaskSubfinder,
 		Domain:    "example.com",
 		Status:    models.TaskStatusCompleted,

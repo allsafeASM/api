@@ -170,7 +170,7 @@ func (d *DiscordNotifier) createPayload(step NotificationStep, taskMsg *models.T
 		embed.Fields = []DiscordEmbedField{
 			{Name: "Task", Value: string(taskMsg.Task), Inline: true},
 			{Name: "Domain", Value: taskMsg.Domain, Inline: true},
-			{Name: "Scan ID", Value: taskMsg.ScanID, Inline: true},
+			{Name: "Scan ID", Value: fmt.Sprintf("%d", taskMsg.ScanID), Inline: true},
 		}
 
 	case StepTaskStarted:
@@ -180,7 +180,7 @@ func (d *DiscordNotifier) createPayload(step NotificationStep, taskMsg *models.T
 		embed.Fields = []DiscordEmbedField{
 			{Name: "Task", Value: string(taskMsg.Task), Inline: true},
 			{Name: "Domain", Value: taskMsg.Domain, Inline: true},
-			{Name: "Scan ID", Value: taskMsg.ScanID, Inline: true},
+			{Name: "Scan ID", Value: fmt.Sprintf("%d", taskMsg.ScanID), Inline: true},
 		}
 
 	case StepTaskCompleted:
@@ -190,7 +190,7 @@ func (d *DiscordNotifier) createPayload(step NotificationStep, taskMsg *models.T
 		embed.Fields = []DiscordEmbedField{
 			{Name: "Task", Value: string(taskMsg.Task), Inline: true},
 			{Name: "Domain", Value: taskMsg.Domain, Inline: true},
-			{Name: "Scan ID", Value: taskMsg.ScanID, Inline: true},
+			{Name: "Scan ID", Value: fmt.Sprintf("%d", taskMsg.ScanID), Inline: true},
 		}
 
 		// Add duration if available
@@ -215,7 +215,7 @@ func (d *DiscordNotifier) createPayload(step NotificationStep, taskMsg *models.T
 		embed.Fields = []DiscordEmbedField{
 			{Name: "Task", Value: string(taskMsg.Task), Inline: true},
 			{Name: "Domain", Value: taskMsg.Domain, Inline: true},
-			{Name: "Scan ID", Value: taskMsg.ScanID, Inline: true},
+			{Name: "Scan ID", Value: fmt.Sprintf("%d", taskMsg.ScanID), Inline: true},
 		}
 
 		// Add duration if available
@@ -238,7 +238,7 @@ func (d *DiscordNotifier) createPayload(step NotificationStep, taskMsg *models.T
 		embed.Fields = []DiscordEmbedField{
 			{Name: "Task", Value: string(taskMsg.Task), Inline: true},
 			{Name: "Domain", Value: taskMsg.Domain, Inline: true},
-			{Name: "Scan ID", Value: taskMsg.ScanID, Inline: true},
+			{Name: "Scan ID", Value: fmt.Sprintf("%d", taskMsg.ScanID), Inline: true},
 		}
 
 		// Add duration if available
@@ -255,7 +255,7 @@ func (d *DiscordNotifier) createPayload(step NotificationStep, taskMsg *models.T
 		embed.Fields = []DiscordEmbedField{
 			{Name: "Task", Value: string(taskMsg.Task), Inline: true},
 			{Name: "Domain", Value: taskMsg.Domain, Inline: true},
-			{Name: "Scan ID", Value: taskMsg.ScanID, Inline: true},
+			{Name: "Scan ID", Value: fmt.Sprintf("%d", taskMsg.ScanID), Inline: true},
 		}
 
 		// Add duration if available

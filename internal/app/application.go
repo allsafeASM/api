@@ -141,54 +141,46 @@ func (app *Application) initializeTaskHandler() error {
 }
 
 // Start begins the application's main processing loop
-func (app *Application) Start(shutdownChan chan struct{}) error {
-	processingErr := make(chan error, 1)
-	go app.startMessageProcessing(processingErr)
-
-	return app.waitForShutdown(processingErr, shutdownChan)
-}
-
-// startMessageProcessing begins processing messages from the queue
-func (app *Application) startMessageProcessing(processingErr chan<- error) {
-	pollInterval := time.Duration(app.config.App.PollInterval) * time.Second
-	lockRenewalInterval := time.Duration(app.config.App.LockRenewalInterval) * time.Second
-	maxLockRenewalTime := time.Duration(app.config.App.MaxLockRenewalTime) * time.Second
-	scannerTimeout := time.Duration(app.config.App.ScannerTimeout) * time.Second
-
-	err := app.serviceBusClient.ProcessMessages(
-		app.ctx,
-		app.taskHandler.HandleTask,
-		pollInterval,
-		lockRenewalInterval,
-		maxLockRenewalTime,
-		scannerTimeout,
-	)
-
-	processingErr <- err
+func (app *Application) Start() error {
+	return app.waitForShutdown()
 }
 
 // waitForShutdown waits for shutdown signals and handles graceful shutdown
-func (app *Application) waitForShutdown(processingErr <-chan error, shutdownChan chan struct{}) error {
+func (app *Application) waitForShutdown() error {
 	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)
 
+	// Start message processing in a goroutine
+	processingErr := make(chan error, 1)
+	go func() {
+		pollInterval := time.Duration(app.config.App.PollInterval) * time.Second
+		lockRenewalInterval := time.Duration(app.config.App.LockRenewalInterval) * time.Second
+		maxLockRenewalTime := time.Duration(app.config.App.MaxLockRenewalTime) * time.Second
+		scannerTimeout := time.Duration(app.config.App.ScannerTimeout) * time.Second
+
+		err := app.serviceBusClient.ProcessMessages(
+			app.ctx,
+			app.taskHandler.HandleTask,
+			pollInterval,
+			lockRenewalInterval,
+			maxLockRenewalTime,
+			scannerTimeout,
+		)
+
+		processingErr <- err
+	}()
+
 	select {
 	case <-signalChannel:
-		return app.handleGracefulShutdown(shutdownChan)
+		return app.handleGracefulShutdown()
 	case err := <-processingErr:
 		return err
 	}
 }
 
 // handleGracefulShutdown performs graceful shutdown of the application
-func (app *Application) handleGracefulShutdown(shutdownChan chan struct{}) error {
-	// Only print shutdown message once
-	select {
-	case shutdownChan <- struct{}{}:
-		gologger.Info().Msg("Shutting down gracefully...")
-	default:
-		// Another worker already printed the message
-	}
+func (app *Application) handleGracefulShutdown() error {
+	gologger.Info().Msg("Shutting down gracefully...")
 
 	// Cancel the main context to stop all goroutines
 	app.cancel()
@@ -198,13 +190,6 @@ func (app *Application) handleGracefulShutdown(shutdownChan chan struct{}) error
 		app.serviceBusClient.Close(context.Background())
 	}
 
-	// Only print completion message once
-	select {
-	case shutdownChan <- struct{}{}:
-		gologger.Info().Msg("Shutdown complete")
-	default:
-		// Another worker already printed the message
-	}
-
+	gologger.Info().Msg("Shutdown complete")
 	return nil
 }
