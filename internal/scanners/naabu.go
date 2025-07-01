@@ -63,8 +63,7 @@ func (s *NaabuScanner) Execute(ctx context.Context, input interface{}) (models.S
 		return nil, err
 	}
 
-	gologger.Info().Msgf("Naabu starting with domain: %s, IPs count: %d, hosts file: %s",
-		naabuInput.Domain, len(naabuInput.IPs), naabuInput.HostsFileLocation)
+	gologger.Info().Msgf("Starting naabu scan for domain: %s", naabuInput.Domain)
 
 	// Check if context is cancelled
 	select {
@@ -83,7 +82,7 @@ func (s *NaabuScanner) Execute(ctx context.Context, input interface{}) (models.S
 		return nil, common.NewValidationError("ips", "no IPs provided for port scanning")
 	}
 
-	gologger.Info().Msgf("Starting naabu scan with %d IPs", len(ipsToProcess))
+	gologger.Debug().Msgf("Processing %d IPs for port scanning", len(ipsToProcess))
 
 	// Execute naabu scan using the library
 	ports, err := s.executeNaabuScan(ctx, naabuInput, ipsToProcess)
@@ -95,32 +94,23 @@ func (s *NaabuScanner) Execute(ctx context.Context, input interface{}) (models.S
 	// Determine result domain
 	resultDomain := s.determineResultDomain(naabuInput, ipsToProcess)
 
-	gologger.Info().Msgf("Naabu completed for domain %s, processed %d IPs, found open ports for %d IPs",
-		resultDomain, len(ipsToProcess), len(ports))
-
 	// Create and return the result
 	result := models.NaabuResult{
 		Domain: resultDomain,
 		Ports:  ports,
 	}
 
-	gologger.Info().Msgf("Naabu result created successfully with %d IPs having open ports", len(ports))
-
-	// Log detailed result information
+	// Log summary
 	totalPorts := 0
 	for _, portList := range ports {
 		totalPorts += len(portList)
 	}
-	gologger.Info().Msgf("Total open ports found: %d across %d IPs", totalPorts, len(ports))
 
-	// Add final validation to ensure we have a valid result
 	if len(ports) == 0 {
-		gologger.Warning().Msgf("Naabu scan completed but no open ports were found - this might be normal for the target")
+		gologger.Info().Msgf("Naabu scan completed for %s: no open ports found", resultDomain)
 	} else {
-		gologger.Info().Msgf("Naabu scan found open ports on %d IPs", len(ports))
+		gologger.Info().Msgf("Naabu scan completed for %s: %d open ports across %d IPs", resultDomain, totalPorts, len(ports))
 	}
-
-	gologger.Info().Msgf("Naabu execution completed successfully for domain: %s", resultDomain)
 
 	return result, nil
 }
@@ -132,7 +122,7 @@ func (s *NaabuScanner) collectIPs(ctx context.Context, naabuInput models.NaabuIn
 	// 1. Add IPs from the input
 	if len(naabuInput.IPs) > 0 {
 		allIPs = append(allIPs, naabuInput.IPs...)
-		gologger.Info().Msgf("Added %d IPs from input", len(naabuInput.IPs))
+		gologger.Debug().Msgf("Added %d IPs from input", len(naabuInput.IPs))
 	}
 
 	// 2. Read IPs from blob storage if HostsFileLocation is provided
@@ -145,7 +135,7 @@ func (s *NaabuScanner) collectIPs(ctx context.Context, naabuInput models.NaabuIn
 			return nil, err
 		}
 		allIPs = append(allIPs, blobIPs...)
-		gologger.Info().Msgf("Added %d IPs from hosts file", len(blobIPs))
+		gologger.Debug().Msgf("Added %d IPs from hosts file", len(blobIPs))
 	}
 
 	// Remove duplicates and validate IPs
@@ -156,7 +146,7 @@ func (s *NaabuScanner) collectIPs(ctx context.Context, naabuInput models.NaabuIn
 
 // readIPsFromBlob reads IPs from blob storage
 func (s *NaabuScanner) readIPsFromBlob(ctx context.Context, hostsFileLocation string) ([]string, error) {
-	gologger.Info().Msgf("Reading hosts file from blob storage: %s", hostsFileLocation)
+	gologger.Debug().Msgf("Reading hosts file from blob storage: %s", hostsFileLocation)
 
 	hostsFileContent, err := s.blobClient.ReadHostsFileFromBlob(ctx, hostsFileLocation)
 	if err != nil {
@@ -207,15 +197,7 @@ func (s *NaabuScanner) executeNaabuScan(ctx context.Context, naabuInput models.N
 		return nil, common.NewValidationError("hosts", "no valid hosts provided for scanning")
 	}
 
-	// Show first few hosts for debugging
-	hostsToShow := 5
-	if len(ips) < hostsToShow {
-		hostsToShow = len(ips)
-	}
-	gologger.Info().Msgf("Naabu options configured with %d hosts: %v", len(ips), ips[:hostsToShow])
-	if len(ips) > 5 {
-		gologger.Info().Msgf("... and %d more hosts", len(ips)-5)
-	}
+	gologger.Debug().Msgf("Configuring naabu with %d hosts", len(ips))
 
 	// Port configuration with priority: specific ports > port range > top ports > default
 	if len(naabuInput.Ports) > 0 {
@@ -225,64 +207,48 @@ func (s *NaabuScanner) executeNaabuScan(ctx context.Context, naabuInput models.N
 			portStrs[i] = strconv.Itoa(port)
 		}
 		options.Ports = strings.Join(portStrs, ",")
-		gologger.Info().Msgf("Using specific ports: %s", options.Ports)
+		gologger.Debug().Msgf("Using specific ports: %s", options.Ports)
 	} else if naabuInput.PortRange != "" {
 		options.Ports = naabuInput.PortRange
-		gologger.Info().Msgf("Using port range: %s", options.Ports)
+		gologger.Debug().Msgf("Using port range: %s", options.Ports)
 	} else if naabuInput.TopPorts != "" {
 		options.TopPorts = naabuInput.TopPorts
-		gologger.Info().Msgf("Using top ports: %s", options.TopPorts)
+		gologger.Debug().Msgf("Using top ports: %s", options.TopPorts)
 	} else {
 		// Default to top 100 ports (naabu only supports: full, 100, 1000)
 		options.TopPorts = "100"
-		gologger.Info().Msgf("Using default top ports: %s", options.TopPorts)
-	}
-
-	// Log final port configuration
-	if options.Ports != "" {
-		gologger.Info().Msgf("Final port configuration: specific ports = %s", options.Ports)
-	} else if options.TopPorts != "" {
-		gologger.Info().Msgf("Final port configuration: top ports = %s", options.TopPorts)
-	} else {
-		gologger.Warning().Msgf("No port configuration set - this might cause issues")
+		gologger.Debug().Msgf("Using default top ports: %s", options.TopPorts)
 	}
 
 	// Rate limiting and concurrency - set reasonable defaults
 	if naabuInput.RateLimit > 0 {
 		options.Rate = naabuInput.RateLimit
-		gologger.Info().Msgf("Using custom rate limit: %d", options.Rate)
 	} else {
 		// Default rate limit of 1000 packets per second
 		options.Rate = 1000
-		gologger.Info().Msgf("Using default rate limit: %d", options.Rate)
 	}
 
 	if naabuInput.Concurrency > 0 {
 		options.Threads = naabuInput.Concurrency
-		gologger.Info().Msgf("Using custom concurrency: %d", options.Threads)
 	} else {
 		// Default to 25 concurrent threads for better performance
 		options.Threads = 25
-		gologger.Info().Msgf("Using default concurrency: %d", options.Threads)
 	}
 
 	// Set retries to a reasonable value
 	options.Retries = 3
-	gologger.Info().Msgf("Using retries: %d", options.Retries)
 
 	// Timeout configuration
 	if naabuInput.Timeout > 0 {
 		options.Timeout = time.Duration(naabuInput.Timeout) * time.Second
-		gologger.Info().Msgf("Using custom timeout: %v", options.Timeout)
 	} else {
 		// Default timeout of 1 second per host (naabu default for SYN scan)
 		options.Timeout = time.Second
-		gologger.Info().Msgf("Using default timeout: %v", options.Timeout)
 	}
 
 	// Performance optimizations
 	options.Silent = true             // Suppress banner and progress
-	options.Verbose = true            // Disable verbose output
+	options.Verbose = false           // Disable verbose output
 	options.Stream = false            // Disable streaming mode to ensure proper result capture
 	options.Passive = false           // Ensure active scanning
 	options.ScanAllIPS = false        // Don't scan all IPs if some are down
@@ -313,7 +279,7 @@ func (s *NaabuScanner) executeNaabuScan(ctx context.Context, naabuInput models.N
 		atomic.AddInt32(&processedIPs, 1)
 		atomic.AddInt32(&totalPortsFound, int32(portsFound))
 
-		gologger.Debug().Msgf("OnResult called for IP: %s (Host: %s) with %d ports", ip, hr.Host, portsFound)
+		gologger.Debug().Msgf("Found %d open ports on %s", portsFound, ip)
 
 		// Process all ports for this host
 		for _, port := range hr.Ports {
@@ -326,19 +292,12 @@ func (s *NaabuScanner) executeNaabuScan(ctx context.Context, naabuInput models.N
 				ports[ip] = []models.PortInfo{}
 			}
 			ports[ip] = append(ports[ip], portInfo)
-
-			gologger.Debug().Msgf("Found open port: %s:%d (protocol: %s)", ip, port.Port, port.Protocol.String())
 		}
-
-		gologger.Debug().Msgf("Processed IP %d/%d: %s (found %d open ports)",
-			atomic.LoadInt32(&processedIPs), len(ips), ip, portsFound)
 	}
 
-	gologger.Info().Msgf("Executing naabu with %d IPs, ports: %s, threads: %d, rate: %d",
-		len(ips), options.Ports, options.Threads, options.Rate)
+	gologger.Debug().Msgf("Starting naabu scan with %d IPs, threads: %d, rate: %d", len(ips), options.Threads, options.Rate)
 
 	// Create naabu runner following the official documentation pattern
-	gologger.Info().Msgf("Creating naabu runner...")
 	naabuRunner, err := runner.NewRunner(&options)
 	// Return log level back
 	gologger.DefaultLogger.SetMaxLevel(levels.LevelInfo)
@@ -353,40 +312,24 @@ func (s *NaabuScanner) executeNaabuScan(ctx context.Context, naabuInput models.N
 	}()
 
 	// Execute the scan following the official documentation pattern
-	gologger.Info().Msgf("Starting naabu enumeration with context...")
 	err = naabuRunner.RunEnumeration(ctx)
 	if err != nil {
 		gologger.Error().Msgf("Naabu enumeration failed: %v", err)
 		return nil, common.NewScannerError("naabu scan failed", err)
 	}
-	gologger.Info().Msgf("Naabu enumeration completed successfully")
 
 	duration := time.Since(startTime)
 	processedCount := atomic.LoadInt32(&processedIPs)
 	totalPorts := atomic.LoadInt32(&totalPortsFound)
 
-	gologger.Info().Msgf("Naabu scan completed in %v, processed %d/%d IPs, found %d total open ports across %d IPs",
-		duration, processedCount, len(ips), totalPorts, len(ports))
+	gologger.Debug().Msgf("Naabu scan completed in %v, processed %d/%d IPs, found %d total open ports",
+		duration, processedCount, len(ips), totalPorts)
 
 	// Additional debugging information
 	if processedCount == 0 {
 		gologger.Warning().Msgf("No IPs were processed by OnResult callback - this might indicate an issue with result capture")
 	}
 
-	// Log summary of results
-	if len(ports) > 0 {
-		gologger.Info().Msgf("Scan results summary:")
-		for ip, portList := range ports {
-			gologger.Info().Msgf("  %s: %d open ports", ip, len(portList))
-			for _, port := range portList {
-				gologger.Debug().Msgf("    - Port %d (%s)", port.Port, port.Protocol)
-			}
-		}
-	} else {
-		gologger.Info().Msgf("No open ports found")
-	}
-
-	gologger.Info().Msgf("Returning scan results with %d IPs having open ports", len(ports))
 	return ports, nil
 }
 

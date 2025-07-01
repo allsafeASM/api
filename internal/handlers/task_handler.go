@@ -55,7 +55,7 @@ func (h *TaskHandler) HandleTask(ctx context.Context, taskMsg *models.TaskMessag
 		return validationResult
 	}
 
-	// Create and process task result
+	// Create task result
 	result := h.createTaskResult(taskMsg)
 	h.sendDiscordNotification(ctx, taskMsg, result, nil, notification.StepTaskStarted)
 

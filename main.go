@@ -7,18 +7,16 @@ import (
 )
 
 func main() {
-	// Load configuration
+	// Load and validate configuration
 	cfg := config.Load()
 	if err := cfg.Validate(); err != nil {
 		gologger.Fatal().Msgf("Configuration validation failed: %v", err)
 	}
 
-	// Log configuration once at startup
 	logConfiguration(cfg)
+	gologger.Info().Msg("Starting AllSafe ASM Worker")
 
-	gologger.Info().Msg("Starting AllSafe ASM...")
-
-	// Create and start single application instance
+	// Create and initialize application
 	application, err := app.NewApplication()
 	if err != nil {
 		gologger.Fatal().Msgf("Failed to initialize application: %v", err)
@@ -26,14 +24,14 @@ func main() {
 
 	gologger.Info().Msg("Application ready. Press Ctrl+C to exit.")
 
+	// Start the application
 	if err := application.Start(); err != nil {
 		gologger.Fatal().Msgf("Application error: %v", err)
 	}
 
-	gologger.Info().Msg("Application has completed")
+	gologger.Info().Msg("Application shutdown complete")
 }
 
-// logConfiguration logs the current application configuration
 func logConfiguration(cfg *config.Config) {
 	gologger.Info().Msg("Configuration:")
 	gologger.Info().Msgf("  Service Bus: %s/%s", cfg.Azure.ServiceBusNamespace, cfg.Azure.QueueName)

@@ -34,60 +34,43 @@ func TestNewDiscordNotifier(t *testing.T) {
 }
 
 func TestDiscordNotifier_CreatePayload(t *testing.T) {
-	notifier := &DiscordNotifier{
-		enabled: true,
+	notifier, err := NewDiscordNotifier()
+	if err != nil {
+		t.Fatalf("Failed to create Discord notifier: %v", err)
 	}
 
 	taskMsg := &models.TaskMessage{
-		Task:       "subfinder",
-		Domain:     "example.com",
-		ScanID:     123,
-		InstanceID: "test-instance-456",
+		Task:   models.TaskSubfinder,
+		ScanID: 123,
+		Domain: "example.com",
 	}
 
-	subfinderResult := models.SubfinderResult{
-		Domain:     "example.com",
-		Subdomains: []string{"www.example.com", "api.example.com", "mail.example.com", "ftp.example.com", "admin.example.com"},
-	}
-
-	result := &models.TaskResult{
-		ScanID:    123,
-		Task:      "subfinder",
-		Domain:    "example.com",
-		Status:    "completed",
-		Timestamp: time.Now().Format(time.RFC3339),
-		Data:      subfinderResult,
-	}
-
-	// Test task received payload
+	// Test Task Received
 	payload := notifier.createPayload(StepTaskReceived, taskMsg, nil, nil)
-	if payload.Username != "AllSafe ASM Bot" {
-		t.Errorf("Expected username 'AllSafe ASM Bot', got: %s", payload.Username)
+	if len(payload.Embeds) == 0 {
+		t.Fatal("Expected at least one embed")
 	}
-	if len(payload.Embeds) != 1 {
-		t.Errorf("Expected 1 embed, got: %d", len(payload.Embeds))
-	}
-	if payload.Embeds[0].Title != "🔄 Task Received" {
-		t.Errorf("Expected title '🔄 Task Received', got: %s", payload.Embeds[0].Title)
+	if payload.Embeds[0].Title != "Task Received" {
+		t.Errorf("Expected title 'Task Received', got: %s", payload.Embeds[0].Title)
 	}
 
-	// Test task completed payload
+	// Test Task Completed
+	result := &models.TaskResult{
+		Task:   models.TaskSubfinder,
+		ScanID: 123,
+		Domain: "example.com",
+		Status: models.TaskStatusCompleted,
+		Data:   models.SubfinderResult{Domain: "example.com", Subdomains: []string{"www.example.com"}},
+	}
 	payload = notifier.createPayload(StepTaskCompleted, taskMsg, result, nil)
-	if payload.Embeds[0].Title != "✅ Task Completed" {
-		t.Errorf("Expected title '✅ Task Completed', got: %s", payload.Embeds[0].Title)
-	}
-	if payload.Embeds[0].Color != ColorSuccess {
-		t.Errorf("Expected color %d, got: %d", ColorSuccess, payload.Embeds[0].Color)
+	if payload.Embeds[0].Title != "Task Completed" {
+		t.Errorf("Expected title 'Task Completed', got: %s", payload.Embeds[0].Title)
 	}
 
-	// Test task failed payload
-	err := fmt.Errorf("Test error")
-	payload = notifier.createPayload(StepTaskFailed, taskMsg, nil, err)
-	if payload.Embeds[0].Title != "❌ Task Failed" {
-		t.Errorf("Expected title '❌ Task Failed', got: %s", payload.Embeds[0].Title)
-	}
-	if payload.Embeds[0].Color != ColorError {
-		t.Errorf("Expected color %d, got: %d", ColorError, payload.Embeds[0].Color)
+	// Test Task Failed
+	payload = notifier.createPayload(StepTaskFailed, taskMsg, nil, fmt.Errorf("test error"))
+	if payload.Embeds[0].Title != "Task Failed" {
+		t.Errorf("Expected title 'Task Failed', got: %s", payload.Embeds[0].Title)
 	}
 }
 

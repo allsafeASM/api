@@ -127,24 +127,18 @@ func (s *DNSXScanner) ValidateInput(input models.ScannerInput) error {
 }
 
 func (s *DNSXScanner) Execute(ctx context.Context, input interface{}) (models.ScannerResult, error) {
-	// Type assert and validate input
+	// Type assert to the specific input type we expect
 	dnsxInput, ok := input.(models.DNSXInput)
 	if !ok {
 		return nil, common.NewValidationError("input", "invalid input type, expected DNSXInput")
 	}
 
-	// Validate input using DNSX-specific validation
+	// Validate input
 	if err := s.ValidateInput(dnsxInput); err != nil {
 		return nil, err
 	}
 
-	gologger.Info().Msgf("DNSX starting with domain: %s, subdomains count: %d, hosts file: %s",
-		dnsxInput.Domain, len(dnsxInput.Subdomains), dnsxInput.HostsFileLocation)
-
-	// Initialize optimized components
-	if err := s.initializeComponents(); err != nil {
-		return nil, err
-	}
+	gologger.Info().Msgf("Starting DNS resolution for domain: %s", dnsxInput.Domain)
 
 	// Check if context is cancelled
 	select {
@@ -153,25 +147,47 @@ func (s *DNSXScanner) Execute(ctx context.Context, input interface{}) (models.Sc
 	default:
 	}
 
+	// Initialize components if needed
+	if err := s.initializeComponents(); err != nil {
+		return nil, err
+	}
+
 	// Collect and process subdomains
 	subdomainsToProcess, err := s.collectSubdomains(ctx, dnsxInput)
 	if err != nil {
 		return nil, err
 	}
 
-	// Process DNS resolution with optimizations
+	if len(subdomainsToProcess) == 0 {
+		return nil, common.NewValidationError("subdomains", "no subdomains provided for DNS resolution")
+	}
+
+	gologger.Debug().Msgf("Processing %d subdomains for DNS resolution", len(subdomainsToProcess))
+
+	// Execute DNS resolution
 	records := s.processDNSResolutionOptimized(ctx, subdomainsToProcess)
 
 	// Determine result domain
 	resultDomain := s.determineResultDomain(dnsxInput, subdomainsToProcess)
 
-	gologger.Info().Msgf("DNSX completed for domain %s, processed %d subdomains, found records for %d subdomains",
-		resultDomain, len(subdomainsToProcess), len(records))
+	// Count subdomains with records
+	subdomainsWithRecords := 0
+	for _, record := range records {
+		if !s.hasNoRecords(record) {
+			subdomainsWithRecords++
+		}
+	}
 
-	return models.DNSXResult{
+	gologger.Info().Msgf("DNS resolution completed for %s: %d records found across %d subdomains",
+		resultDomain, subdomainsWithRecords, len(records))
+
+	// Create and return the result
+	result := models.DNSXResult{
 		Domain:  resultDomain,
 		Records: records,
-	}, nil
+	}
+
+	return result, nil
 }
 
 // initializeComponents initializes all optimized components
@@ -271,38 +287,37 @@ func (s *DNSXScanner) collectSubdomains(ctx context.Context, dnsxInput models.DN
 	// 1. Add subdomains from the input
 	if len(dnsxInput.Subdomains) > 0 {
 		allSubdomains = append(allSubdomains, dnsxInput.Subdomains...)
-		gologger.Info().Msgf("Added %d subdomains from input", len(dnsxInput.Subdomains))
+		gologger.Debug().Msgf("Added %d subdomains from input", len(dnsxInput.Subdomains))
 	}
 
 	// 2. Read subdomains from blob storage if HostsFileLocation is provided
-	if dnsxInput.HostsFileLocation != "" && s.blobClient != nil {
-		blobSubdomains, err := s.readSubdomainsFromBlob(ctx, dnsxInput.HostsFileLocation)
-		if err != nil {
-			return nil, err
+	if dnsxInput.HostsFileLocation != "" {
+		if s.blobClient == nil {
+			gologger.Warning().Msgf("Hosts file location provided (%s) but blob client is nil", dnsxInput.HostsFileLocation)
+		} else {
+			blobSubdomains, err := s.readSubdomainsFromBlob(ctx, dnsxInput.HostsFileLocation)
+			if err != nil {
+				return nil, err
+			}
+			allSubdomains = append(allSubdomains, blobSubdomains...)
+			gologger.Debug().Msgf("Added %d subdomains from hosts file", len(blobSubdomains))
 		}
-		allSubdomains = append(allSubdomains, blobSubdomains...)
-		gologger.Info().Msgf("Added %d subdomains from hosts file", len(blobSubdomains))
-	} else if dnsxInput.HostsFileLocation != "" {
-		gologger.Warning().Msgf("Hosts file location provided (%s) but blob client is nil", dnsxInput.HostsFileLocation)
 	}
 
-	// Determine what to process
-	if len(allSubdomains) > 0 {
-		// Process the collected subdomains list
-		gologger.Info().Msgf("Processing %d subdomains from combined sources", len(allSubdomains))
-		return allSubdomains, nil
-	} else if dnsxInput.Domain != "" {
-		// Fallback to single domain if no subdomains provided
-		gologger.Info().Msgf("No subdomains found, processing single domain: %s", dnsxInput.Domain)
-		return []string{dnsxInput.Domain}, nil
+	// 3. If no subdomains from other sources, use the domain itself
+	if len(allSubdomains) == 0 {
+		allSubdomains = []string{dnsxInput.Domain}
+		gologger.Debug().Msgf("No subdomains found, processing single domain: %s", dnsxInput.Domain)
 	} else {
-		return nil, common.NewValidationError("domain", "no domain or subdomains provided for DNS resolution")
+		gologger.Debug().Msgf("Processing %d subdomains from combined sources", len(allSubdomains))
 	}
+
+	return allSubdomains, nil
 }
 
 // readSubdomainsFromBlob reads subdomains from blob storage
 func (s *DNSXScanner) readSubdomainsFromBlob(ctx context.Context, hostsFileLocation string) ([]string, error) {
-	gologger.Info().Msgf("Reading hosts file from blob storage: %s", hostsFileLocation)
+	gologger.Debug().Msgf("Reading hosts file from blob storage: %s", hostsFileLocation)
 
 	hostsFileContent, err := s.blobClient.ReadHostsFileFromBlob(ctx, hostsFileLocation)
 	if err != nil {

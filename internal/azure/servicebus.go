@@ -65,52 +65,34 @@ func (s *ServiceBusClient) Close(ctx context.Context) error {
 
 // HealthCheck verifies the Service Bus connection is working
 func (s *ServiceBusClient) HealthCheck(ctx context.Context) error {
-	// Try to receive a message with a very short timeout to test connectivity
-	testCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	_, err := s.receiver.ReceiveMessages(testCtx, 1, nil)
+	// Try to get the receiver to test the connection
+	receiver, err := s.client.NewReceiverForQueue(s.queue, nil)
 	if err != nil {
-		// If it's a timeout, that's actually good - it means the connection works
-		if testCtx.Err() == context.DeadlineExceeded {
-			gologger.Debug().Msg("Service Bus health check passed - connection is working")
-			return nil
-		}
-		return fmt.Errorf("Service Bus health check failed: %w", err)
+		return fmt.Errorf("failed to create receiver for health check: %w", err)
 	}
+	defer receiver.Close(ctx)
 
+	gologger.Debug().Msg("Service Bus health check passed - connection is working")
 	return nil
 }
 
 // ProcessMessages continuously processes messages from the queue
 func (s *ServiceBusClient) ProcessMessages(ctx context.Context, handler func(context.Context, *models.TaskMessage) *models.MessageProcessingResult, pollInterval time.Duration, lockRenewalInterval time.Duration, maxLockRenewalTime time.Duration, scannerTimeout time.Duration) error {
+	gologger.Info().Msg("Starting message processing loop")
+
 	for {
 		select {
 		case <-ctx.Done():
 			gologger.Info().Msg("Message processing stopped due to context cancellation")
-			return ctx.Err()
+			return nil
 		default:
 		}
 
 		// Process next message
-		if err := s.processNextMessage(ctx, s.receiver, handler, pollInterval, lockRenewalInterval, maxLockRenewalTime, scannerTimeout); err != nil {
-			// Check if this is a timeout error (which is normal when no messages are available)
-			if s.isTimeoutError(err) {
-				gologger.Debug().Msgf("Receive timeout - this is normal when no messages are available")
-			} else {
-				gologger.Error().Msgf("Error processing message: %v", err)
-			}
-
-			// Add a small delay before retrying to avoid overwhelming the service
-			if err := s.waitWithContext(ctx, 1*time.Second); err != nil {
-				return err
-			}
-			continue
-		}
-
-		// Add a small delay between polling attempts to reduce load
-		if err := s.waitWithContext(ctx, 100*time.Millisecond); err != nil {
-			return err
+		err := s.processNextMessage(ctx, s.receiver, handler, pollInterval, lockRenewalInterval, maxLockRenewalTime, scannerTimeout)
+		if err != nil {
+			gologger.Error().Msgf("Error processing message: %v", err)
+			// Continue processing other messages
 		}
 	}
 }
@@ -121,49 +103,38 @@ func (s *ServiceBusClient) isTimeoutError(err error) bool {
 		strings.Contains(err.Error(), "timeout"))
 }
 
-// waitWithContext waits for the specified duration or until context is cancelled
-func (s *ServiceBusClient) waitWithContext(ctx context.Context, duration time.Duration) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-time.After(duration):
-		return nil
-	}
-}
-
 // processNextMessage processes the next message from the queue
 func (s *ServiceBusClient) processNextMessage(ctx context.Context, receiver *azservicebus.Receiver, handler func(context.Context, *models.TaskMessage) *models.MessageProcessingResult, pollInterval time.Duration, lockRenewalInterval time.Duration, maxLockRenewalTime time.Duration, scannerTimeout time.Duration) error {
-	// Use a longer timeout for receive operations (minimum 30 seconds)
-	receiveTimeout := 30 * time.Second
-	if pollInterval > receiveTimeout {
-		receiveTimeout = pollInterval
+	// Set receive timeout to poll interval
+	receiveTimeout := pollInterval
+	if receiveTimeout < time.Second {
+		receiveTimeout = time.Second
 	}
 
-	// Receive message with appropriate timeout
+	// Receive message with timeout
 	receiveCtx, cancel := context.WithTimeout(ctx, receiveTimeout)
 	defer cancel()
 
 	messages, err := receiver.ReceiveMessages(receiveCtx, 1, nil)
 	if err != nil {
-		// Check if it's a timeout error and handle gracefully
-		if receiveCtx.Err() == context.DeadlineExceeded {
+		if s.isTimeoutError(err) {
 			gologger.Debug().Msgf("Receive timeout after %v - this is normal when no messages are available", receiveTimeout)
-			return nil // Don't treat timeout as an error when no messages are available
+			return nil
 		}
-		return fmt.Errorf("failed to receive messages: %w", err)
+		return fmt.Errorf("failed to receive message: %w", err)
 	}
 
 	if len(messages) == 0 {
-		// No messages available, this is normal
 		return nil
 	}
 
 	message := messages[0]
+
 	gologger.Debug().Msgf("Received message: %s", message.MessageID)
 
-	// Process the message
-	messageProcessor := s.newMessageProcessor(receiver)
-	result := messageProcessor.ProcessMessage(ctx, message, handler, lockRenewalInterval, maxLockRenewalTime, scannerTimeout)
+	// Create message processor and handle the message
+	processor := s.newMessageProcessor(receiver)
+	result := processor.ProcessMessage(ctx, message, handler, lockRenewalInterval, maxLockRenewalTime, scannerTimeout)
 
 	// Handle the result
 	return s.handleMessageResult(ctx, receiver, message, result)
@@ -180,7 +151,8 @@ func (s *ServiceBusClient) newMessageProcessor(receiver *azservicebus.Receiver) 
 func (s *ServiceBusClient) handleMessageResult(ctx context.Context, receiver *azservicebus.Receiver, message *azservicebus.ReceivedMessage, result *models.MessageProcessingResult) error {
 	if result.Success {
 		// Complete the message
-		if err := receiver.CompleteMessage(ctx, message, nil); err != nil {
+		err := receiver.CompleteMessage(ctx, message, nil)
+		if err != nil {
 			return fmt.Errorf("failed to complete message: %w", err)
 		}
 		gologger.Debug().Msgf("Message completed successfully: %s", message.MessageID)
@@ -190,18 +162,20 @@ func (s *ServiceBusClient) handleMessageResult(ctx context.Context, receiver *az
 	// Handle failure
 	if s.shouldRetryMessage(result) {
 		// Abandon the message for retry
-		if err := receiver.AbandonMessage(ctx, message, nil); err != nil {
+		err := receiver.AbandonMessage(ctx, message, nil)
+		if err != nil {
 			return fmt.Errorf("failed to abandon message: %w", err)
 		}
 		gologger.Warning().Msgf("Message abandoned for retry: %s, error: %v", message.MessageID, result.Error)
-	} else {
-		// Dead letter the message
-		if err := receiver.DeadLetterMessage(ctx, message, nil); err != nil {
-			return fmt.Errorf("failed to dead letter message: %w", err)
-		}
-		gologger.Error().Msgf("Message dead lettered: %s, error: %v", message.MessageID, result.Error)
+		return nil
 	}
 
+	// Dead letter the message
+	err := receiver.DeadLetterMessage(ctx, message, nil)
+	if err != nil {
+		return fmt.Errorf("failed to dead letter message: %w", err)
+	}
+	gologger.Error().Msgf("Message dead lettered: %s, error: %v", message.MessageID, result.Error)
 	return nil
 }
 

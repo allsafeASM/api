@@ -38,19 +38,22 @@ func (b *BlobStorageClient) StoreTaskResult(ctx context.Context, result *models.
 	randomID := uuid.New().String()
 	blobName := fmt.Sprintf("%s-%d/%s/out/%s.json", result.Domain, result.ScanID, result.Task, randomID)
 
-	// Marshal the result to JSON
-	resultJSON, err := json.MarshalIndent(result, "", "  ")
+	// Clean the blob path
+	cleanPath := b.cleanBlobPath(blobName)
+
+	// Convert result to JSON
+	jsonData, err := json.Marshal(result)
 	if err != nil {
 		return fmt.Errorf("failed to marshal task result: %w", err)
 	}
 
 	// Upload to blob storage
-	_, err = b.client.UploadBuffer(ctx, b.containerName, blobName, resultJSON, &azblob.UploadBufferOptions{})
+	_, err = b.client.UploadBuffer(ctx, b.containerName, cleanPath, jsonData, &azblob.UploadBufferOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to upload task result to blob storage: %w", err)
 	}
 
-	gologger.Info().Msgf("Stored task result in blob: %s/%s", b.containerName, blobName)
+	gologger.Debug().Msgf("Stored task result in blob: %s/%s", b.containerName, blobName)
 	return nil
 }
 
@@ -65,13 +68,13 @@ func (b *BlobStorageClient) cleanBlobPath(blobPath string) string {
 
 // ReadFileFromBlob reads a file from blob storage
 func (b *BlobStorageClient) ReadFileFromBlob(ctx context.Context, blobPath string) ([]byte, error) {
-	// Clean the blob path to prevent double container names
+	// Clean the blob path
 	cleanPath := b.cleanBlobPath(blobPath)
 
-	// Download the blob
+	// Download from blob storage
 	response, err := b.client.DownloadStream(ctx, b.containerName, cleanPath, &azblob.DownloadStreamOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to download blob %s: %w", cleanPath, err)
+		return nil, fmt.Errorf("failed to download file from blob storage: %w", err)
 	}
 	defer response.Body.Close()
 
@@ -81,7 +84,7 @@ func (b *BlobStorageClient) ReadFileFromBlob(ctx context.Context, blobPath strin
 		return nil, fmt.Errorf("failed to read blob content %s: %w", cleanPath, err)
 	}
 
-	gologger.Info().Msgf("Read file from blob: %s/%s (%d bytes)", b.containerName, cleanPath, len(content))
+	gologger.Debug().Msgf("Read file from blob: %s/%s (%d bytes)", b.containerName, cleanPath, len(content))
 	return content, nil
 }
 
@@ -106,9 +109,9 @@ func (b *BlobStorageClient) StoreSubfinderTextResult(ctx context.Context, result
 
 	_, err := b.client.UploadBuffer(ctx, b.containerName, blobName, []byte(txtContent), &azblob.UploadBufferOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to upload subfinder txt result to blob storage: %w", err)
+		return fmt.Errorf("failed to upload subfinder text result to blob storage: %w", err)
 	}
 
-	gologger.Info().Msgf("Stored subfinder txt result in blob: %s/%s", b.containerName, blobName)
+	gologger.Debug().Msgf("Stored subfinder txt result in blob: %s/%s", b.containerName, blobName)
 	return nil
 }

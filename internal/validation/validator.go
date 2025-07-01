@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/allsafeASM/api/internal/common"
 	"github.com/allsafeASM/api/internal/models"
-	"github.com/projectdiscovery/gologger"
 )
 
 // Validator provides all validation functionality
@@ -124,73 +124,79 @@ func (v *Validator) ValidateDNSXInput(input models.DNSXInput) error {
 
 // ValidateNaabuInput validates naabu input
 func (v *Validator) ValidateNaabuInput(input models.NaabuInput) error {
-	// For Naabu, we can have either IPs OR a hosts file location, or both
-	if len(input.IPs) == 0 && input.HostsFileLocation == "" {
-		return fmt.Errorf("either IPs or hosts file location must be provided for Naabu scanner")
+	// Validate domain
+	if err := v.ValidateDomain(input.Domain); err != nil {
+		return err
 	}
 
-	// If IPs are provided, validate each one
+	// Validate IPs if provided
 	if len(input.IPs) > 0 {
 		for i, ip := range input.IPs {
-			if ip == "" {
-				continue // Skip empty IPs
-			}
 			if !v.isValidIP(ip) {
-				return fmt.Errorf("invalid IP address at index %d: %s", i, ip)
+				return common.NewValidationError(fmt.Sprintf("ips[%d]", i), fmt.Sprintf("invalid IP address: %s", ip))
 			}
 		}
 	}
 
-	// Validate port configuration
-	if len(input.Ports) > 0 && input.PortRange != "" {
-		return fmt.Errorf("cannot specify both specific ports and port range")
-	}
-
-	if len(input.Ports) > 0 && input.TopPorts != "" {
-		return fmt.Errorf("cannot specify both specific ports and top ports")
-	}
-
-	if input.PortRange != "" && input.TopPorts != "" {
-		return fmt.Errorf("cannot specify both port range and top ports")
-	}
-
-	// Ensure at least one port configuration method is provided
-	if len(input.Ports) == 0 && input.PortRange == "" && input.TopPorts == "" {
-		// This is okay - naabu will use default top ports (100)
-		gologger.Info().Msg("No port configuration provided, naabu will use default top 100 ports")
-	}
-
-	// Validate port numbers
-	for i, port := range input.Ports {
-		if port < 1 || port > 65535 {
-			return fmt.Errorf("invalid port number at index %d: %d (must be 1-65535)", i, port)
+	// Validate hosts file location if provided
+	if input.HostsFileLocation != "" {
+		if strings.TrimSpace(input.HostsFileLocation) == "" {
+			return common.NewValidationError("hosts_file_location", "hosts file location cannot be empty")
 		}
 	}
 
-	// Validate top ports
+	// Validate ports if provided
+	if len(input.Ports) > 0 {
+		for i, port := range input.Ports {
+			if port < 1 || port > 65535 {
+				return common.NewValidationError(fmt.Sprintf("ports[%d]", i), fmt.Sprintf("port must be between 1 and 65535, got: %d", port))
+			}
+		}
+	}
+
+	// Validate port range if provided
+	if input.PortRange != "" {
+		if strings.TrimSpace(input.PortRange) == "" {
+			return common.NewValidationError("port_range", "port range cannot be empty")
+		}
+		// Basic validation for port range format (e.g., "1-1000")
+		if !strings.Contains(input.PortRange, "-") {
+			return common.NewValidationError("port_range", "port range must be in format 'start-end' (e.g., '1-1000')")
+		}
+	}
+
+	// Validate top ports if provided
 	if input.TopPorts != "" {
-		validTopPorts := map[string]bool{
-			"full": true,
-			"100":  true,
-			"1000": true,
-		}
+		validTopPorts := map[string]bool{"full": true, "100": true, "1000": true}
 		if !validTopPorts[input.TopPorts] {
-			return fmt.Errorf("invalid top_ports value: %s (must be one of: full, 100, 1000)", input.TopPorts)
+			return common.NewValidationError("top_ports", "top_ports must be one of: 'full', '100', '1000'")
 		}
 	}
 
-	// Validate rate limit and concurrency
-	if input.RateLimit < 0 {
-		return fmt.Errorf("rate limit cannot be negative")
+	// Validate rate limit if provided
+	if input.RateLimit > 0 {
+		if input.RateLimit > 10000 {
+			return common.NewValidationError("rate_limit", "rate limit cannot exceed 10000 packets per second")
+		}
 	}
 
-	if input.Concurrency < 0 {
-		return fmt.Errorf("concurrency cannot be negative")
+	// Validate concurrency if provided
+	if input.Concurrency > 0 {
+		if input.Concurrency > 100 {
+			return common.NewValidationError("concurrency", "concurrency cannot exceed 100")
+		}
 	}
 
-	// Validate timeout
-	if input.Timeout < 0 {
-		return fmt.Errorf("timeout cannot be negative")
+	// Validate timeout if provided
+	if input.Timeout > 0 {
+		if input.Timeout > 3600 {
+			return common.NewValidationError("timeout", "timeout cannot exceed 3600 seconds")
+		}
+	}
+
+	// Ensure at least one source of IPs is provided
+	if len(input.IPs) == 0 && input.HostsFileLocation == "" {
+		return common.NewValidationError("ips", "either IPs or hosts file location must be provided")
 	}
 
 	return nil
