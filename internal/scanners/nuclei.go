@@ -113,18 +113,17 @@ func (s *NucleiScanner) Execute(ctx context.Context, input interface{}) (models.
 			if event.Info.Reference != nil {
 				references = event.Info.Reference.ToSlice()
 			}
-
 			vuln := models.NucleiVulnerability{
-				TemplateID: event.TemplateID,
-				Type:       event.Type,
-				Host:       event.Host,
-				MatchedAt:  event.Matched,
-				Info: models.NucleiInfo{
-					Name:        event.Info.Name,
-					Description: event.Info.Description,
-					Reference:   references,
-					Severity:    severityStr,
-				},
+				TemplateID:  event.TemplateID,
+				Type:        event.Type,
+				Host:        event.Host,
+				MatchedAt:   event.Matched,
+				Request:     event.Request,
+				Response:    event.Response,
+				Name:        event.Info.Name,
+				Description: event.Info.Description,
+				Reference:   references,
+				Severity:    severityStr,
 			}
 
 			vulnerabilities = append(vulnerabilities, vuln)

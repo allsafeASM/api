@@ -200,21 +200,17 @@ func (n NucleiInput) GetScannerName() string {
 
 // NucleiVulnerability represents a single vulnerability found by nuclei
 type NucleiVulnerability struct {
-	TemplateID       string     `json:"template_id"`
-	Info             NucleiInfo `json:"info"`
-	Type             string     `json:"type"`
-	Host             string     `json:"host"`
-	MatchedAt        string     `json:"matched_at"`
-	ExtractedResults []string   `json:"extracted_results,omitempty"`
-}
-
-// NucleiInfo represents template information
-type NucleiInfo struct {
-	Name        string   `json:"name"`
-	Tags        []string `json:"tags,omitempty"`
-	Description string   `json:"description,omitempty"`
-	Reference   []string `json:"reference,omitempty"`
-	Severity    string   `json:"severity,omitempty"`
+	TemplateID       string   `json:"template_id"`
+	Type             string   `json:"type"`
+	Host             string   `json:"host"`
+	MatchedAt        string   `json:"matched_at"`
+	ExtractedResults []string `json:"extracted_results,omitempty"`
+	Request          string   `json:"request,omitempty"`
+	Response         string   `json:"response,omitempty"`
+	Name             string   `json:"name"`
+	Description      string   `json:"description,omitempty"`
+	Reference        []string `json:"reference,omitempty"`
+	Severity         string   `json:"severity,omitempty"`
 }
 
 // NucleiResult represents the result of a nuclei scan
