@@ -33,3 +33,13 @@ jobs:
             --resource-group ${{ secrets.RESOURCE_GROUP }} \
             --image ${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPO }}:${{ inputs.image_tag }} \
             --no-wait
+
+
+      # 3. Deploy to Azure Vuln Container App using Azure CLI
+      - name: 'Deploy to Azure Vuln Container App'
+        run: |
+          az containerapp update \
+            --name ${{ secrets.VULN_CONTAINER_APP_NAME }} \
+            --resource-group ${{ secrets.RESOURCE_GROUP }} \
+            --image ${{ env.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPO }}:${{ inputs.image_tag }} \
+            --no-wait
