@@ -105,6 +105,7 @@ func (s *HttpxScanner) Execute(ctx context.Context, input interface{}) (models.S
 		Threads:             80,
 		Timeout:             10,
 		Version:             true,
+		Asn:                 true,
 		OnResult: func(r runner.Result) {
 			if r.Err != nil {
 				gologger.Debug().Msgf("httpx probe failed for %s: %v", r.Input, r.Err)
@@ -114,9 +115,15 @@ func (s *HttpxScanner) Execute(ctx context.Context, input interface{}) (models.S
 			if len(r.ChainStatusCodes) > 0 {
 				finalStatusCode = r.ChainStatusCodes[len(r.ChainStatusCodes)-1]
 			}
+
+			finalURL := r.URL
+			if len(r.Chain) > 0 {
+				finalURL = r.Chain[len(r.Chain)-1].RequestURL
+			}
+
 			resultCh <- models.HttpxHostResult{
 				Host:          r.Input,
-				URL:           r.URL,
+				URL:           finalURL,
 				StatusCode:    finalStatusCode,
 				Technologies:  r.Technologies,
 				ContentLength: r.ContentLength,
