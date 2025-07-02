@@ -225,6 +225,15 @@ func (h *TaskHandler) processTask(ctx context.Context, taskMsg *models.TaskMessa
 		}
 
 		scannerInput = naabuInput
+	case models.TaskNuclei:
+		nucleiInput := models.NucleiInput{Domain: result.Domain}
+		if taskMsg.FilePath != "" {
+			nucleiInput.HostsFileLocation = taskMsg.FilePath
+			gologger.Info().Msgf("Nuclei task with hosts file (file_path): %s", taskMsg.FilePath)
+		} else {
+			gologger.Info().Msgf("Nuclei task without hosts file, domain: %s", result.Domain)
+		}
+		scannerInput = nucleiInput
 	default:
 		scannerInput = models.SubfinderInput{Domain: result.Domain}
 	}

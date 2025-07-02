@@ -92,6 +92,7 @@ func (s *HttpxScanner) Execute(ctx context.Context, input interface{}) (models.S
 		FollowHostRedirects: true,
 		Threads:             80,
 		Timeout:             10,
+		Version:             true,
 		OnResult: func(r runner.Result) {
 			if r.Err != nil {
 				gologger.Debug().Msgf("httpx probe failed for %s: %v", r.Input, r.Err)

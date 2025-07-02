@@ -21,6 +21,7 @@ func NewScannerFactory() *ScannerFactory {
 			models.TaskHttpx:      NewHttpxScanner(),
 			models.TaskDNSResolve: NewDNSXScanner(),
 			models.TaskNaabu:      NewNaabuScanner(nil), // Naabu scanner without blob client
+			models.TaskNuclei:     NewNucleiScanner(),
 		},
 	}
 }
@@ -38,12 +39,17 @@ func NewScannerFactoryWithBlobClient(blobClient *azure.BlobStorageClient) *Scann
 	httpxScanner := NewHttpxScanner()
 	httpxScanner.SetBlobClient(blobClient)
 
+	// Create Nuclei scanner and set blob client
+	nucleiScanner := NewNucleiScanner()
+	nucleiScanner.SetBlobClient(blobClient)
+
 	return &ScannerFactory{
 		scanners: map[models.Task]models.Scanner{
 			models.TaskSubfinder:  NewSubfinderScanner(),
 			models.TaskHttpx:      httpxScanner,
 			models.TaskDNSResolve: dnsxScanner,
 			models.TaskNaabu:      naabuScanner,
+			models.TaskNuclei:     nucleiScanner,
 		},
 		blobClient: blobClient,
 	}

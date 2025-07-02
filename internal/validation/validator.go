@@ -226,6 +226,7 @@ func (v *Validator) isValidTaskType(taskType models.Task) bool {
 		models.TaskHttpx:      true,
 		models.TaskDNSResolve: true,
 		models.TaskNaabu:      true,
+		models.TaskNuclei:     true,
 	}
 	return validTasks[taskType]
 }

@@ -3,13 +3,18 @@ package scanners
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/allsafeASM/api/internal/common"
 	"github.com/allsafeASM/api/internal/models"
 	"github.com/projectdiscovery/gologger"
 	"github.com/projectdiscovery/subfinder/v2/pkg/runner"
+	"github.com/projectdiscovery/subfinder/v2/pkg/subscraping"
+	"golang.org/x/exp/maps"
 )
 
 // SubfinderScanner implements the Scanner interface for subfinder
@@ -41,6 +46,9 @@ func (s *SubfinderScanner) Execute(ctx context.Context, input interface{}) (mode
 		Threads:            10,
 		Timeout:            60, // 60 seconds timeout
 		MaxEnumerationTime: 30, // 30 seconds max enumeration time
+		RateLimit:          1000,
+		All:                true,
+		//ExcludeSources:     []string{"bufferover", "crtsh", "dnsdumpster", "hackertarget", "rapiddns", "threatcrowd", "virustotal", "zoomeye"},
 	}
 
 	// Create Subfinder runner
@@ -67,6 +75,10 @@ func (s *SubfinderScanner) Execute(ctx context.Context, input interface{}) (mode
 	subdomains := s.processSubfinderOutput(output.Bytes())
 
 	gologger.Debug().Msgf("Subfinder found %d subdomains for domain: %s", len(subdomains), subfinderInput.Domain)
+
+	// Print the scan statistics
+	stats := subfinder.GetStatistics()
+	printStatistics(stats)
 
 	return models.SubfinderResult{
 		Domain:     subfinderInput.Domain,
@@ -96,4 +108,34 @@ func (s *SubfinderScanner) processSubfinderOutput(output []byte) []string {
 
 func (s *SubfinderScanner) GetName() string {
 	return "subfinder"
+}
+
+func printStatistics(stats map[string]subscraping.Statistics) {
+
+	sources := maps.Keys(stats)
+	sort.Strings(sources)
+
+	var lines []string
+	var skipped []string
+
+	for _, source := range sources {
+		sourceStats := stats[source]
+		if sourceStats.Skipped {
+			skipped = append(skipped, fmt.Sprintf(" %s", source))
+		} else {
+			lines = append(lines, fmt.Sprintf(" %-20s %-10s %10d %10d", source, sourceStats.TimeTaken.Round(time.Millisecond).String(), sourceStats.Results, sourceStats.Errors))
+		}
+	}
+
+	if len(lines) > 0 {
+		gologger.Print().Msgf("\n Source               Duration      Results     Errors\n%s\n", strings.Repeat("─", 56))
+		gologger.Print().Msg(strings.Join(lines, "\n"))
+		gologger.Print().Msgf("\n")
+	}
+
+	if len(skipped) > 0 {
+		gologger.Print().Msgf("\n The following sources were included but skipped...\n\n")
+		gologger.Print().Msg(strings.Join(skipped, "\n"))
+		gologger.Print().Msgf("\n\n")
+	}
 }

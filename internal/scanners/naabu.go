@@ -83,6 +83,7 @@ func (s *NaabuScanner) Execute(ctx context.Context, input interface{}) (models.S
 	}
 
 	gologger.Debug().Msgf("Processing %d IPs for port scanning", len(ipsToProcess))
+	gologger.Debug().Msgf("IPs to be scanned: %v", ipsToProcess)
 
 	// Execute naabu scan using the library
 	ports, err := s.executeNaabuScan(ctx, naabuInput, ipsToProcess)
@@ -140,6 +141,9 @@ func (s *NaabuScanner) collectIPs(ctx context.Context, naabuInput models.NaabuIn
 
 	// Remove duplicates and validate IPs
 	uniqueIPs := s.deduplicateAndValidateIPs(allIPs)
+
+	// Debug: Print the IPs that will be scanned
+	gologger.Debug().Msgf("IPs to scan with naabu: %v", uniqueIPs)
 
 	return uniqueIPs, nil
 }
@@ -220,30 +224,61 @@ func (s *NaabuScanner) executeNaabuScan(ctx context.Context, naabuInput models.N
 		gologger.Debug().Msgf("Using default top ports: %s", options.TopPorts)
 	}
 
-	// Rate limiting and concurrency - set reasonable defaults
+	// Dynamic configuration based on number of IPs
+	numIPs := len(ips)
+
+	// Rate limiting and concurrency - adjust based on IP count
 	if naabuInput.RateLimit > 0 {
 		options.Rate = naabuInput.RateLimit
 	} else {
-		// Default rate limit of 1000 packets per second
-		options.Rate = 1000
+		// Adjust rate based on number of IPs
+		switch {
+		case numIPs <= 5:
+			options.Rate = 100 // Conservative for small scans
+		case numIPs <= 20:
+			options.Rate = 1000 // Moderate for medium scans
+		default:
+			options.Rate = 2000 // High for very large scans
+		}
 	}
 
 	if naabuInput.Concurrency > 0 {
 		options.Threads = naabuInput.Concurrency
 	} else {
-		// Default to 25 concurrent threads for better performance
-		options.Threads = 25
+		// Adjust threads based on number of IPs
+		switch {
+		case numIPs <= 5:
+			options.Threads = 5 // Fewer threads for small scans
+		case numIPs <= 20:
+			options.Threads = 25 // Moderate threads for medium scans
+		default:
+			options.Threads = 50 // High thread count for very large scans
+		}
 	}
 
-	// Set retries to a reasonable value
-	options.Retries = 3
+	// Set retries based on scan size
+	switch {
+	case numIPs <= 5:
+		options.Retries = 2 // Fewer retries for small scans
+	case numIPs <= 20:
+		options.Retries = 3 // Standard retries for medium scans
+	default:
+		options.Retries = 1 // Fewer retries for large scans to avoid overwhelming
+	}
 
-	// Timeout configuration
+	// Timeout configuration - adjust based on scan size
 	if naabuInput.Timeout > 0 {
 		options.Timeout = time.Duration(naabuInput.Timeout) * time.Second
 	} else {
-		// Default timeout of 1 second per host (naabu default for SYN scan)
-		options.Timeout = time.Second
+		// Adjust timeout based on number of IPs
+		switch {
+		case numIPs <= 5:
+			options.Timeout = 10 * time.Second // Longer timeout for small scans
+		case numIPs <= 20:
+			options.Timeout = 5 * time.Second // Moderate timeout for medium scans
+		default:
+			options.Timeout = 3 * time.Second // Short timeout for very large scans
+		}
 	}
 
 	// Performance optimizations
@@ -251,12 +286,13 @@ func (s *NaabuScanner) executeNaabuScan(ctx context.Context, naabuInput models.N
 	options.Verbose = false           // Disable verbose output
 	options.Stream = false            // Disable streaming mode to ensure proper result capture
 	options.Passive = false           // Ensure active scanning
-	options.ScanAllIPS = false        // Don't scan all IPs if some are down
 	options.WithHostDiscovery = false // Skip host discovery for faster scanning
 	options.ScanType = "s"            // Use SYN scan for faster scanning (SynScan constant)
 
 	// Set up the OnResult callback following the official documentation pattern
 	options.OnResult = func(hr *result.HostResult) {
+		gologger.Debug().Msgf("OnResult callback triggered for host: %s (IP: %s)", hr.Host, hr.IP)
+
 		// Check context cancellation
 		select {
 		case <-ctx.Done():
@@ -295,12 +331,13 @@ func (s *NaabuScanner) executeNaabuScan(ctx context.Context, naabuInput models.N
 		}
 	}
 
-	gologger.Debug().Msgf("Starting naabu scan with %d IPs, threads: %d, rate: %d", len(ips), options.Threads, options.Rate)
+	gologger.Debug().Msgf("Starting naabu scan with %d IPs, threads: %d, rate: %d, timeout: %v, retries: %d",
+		len(ips), options.Threads, options.Rate, options.Timeout, options.Retries)
 
 	// Create naabu runner following the official documentation pattern
 	naabuRunner, err := runner.NewRunner(&options)
 	// Return log level back
-	gologger.DefaultLogger.SetMaxLevel(levels.LevelInfo)
+	gologger.DefaultLogger.SetMaxLevel(levels.LevelDebug)
 
 	if err != nil {
 		gologger.Error().Msgf("Failed to create naabu runner: %v", err)
@@ -312,11 +349,13 @@ func (s *NaabuScanner) executeNaabuScan(ctx context.Context, naabuInput models.N
 	}()
 
 	// Execute the scan following the official documentation pattern
+	gologger.Debug().Msgf("Starting naabu enumeration...")
 	err = naabuRunner.RunEnumeration(ctx)
 	if err != nil {
 		gologger.Error().Msgf("Naabu enumeration failed: %v", err)
 		return nil, common.NewScannerError("naabu scan failed", err)
 	}
+	gologger.Debug().Msgf("Naabu enumeration completed successfully")
 
 	duration := time.Since(startTime)
 	processedCount := atomic.LoadInt32(&processedIPs)

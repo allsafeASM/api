@@ -31,6 +31,7 @@ const (
 	TaskHttpx      Task = "httpx"
 	TaskDNSResolve Task = "dns_resolve"
 	TaskNaabu      Task = "port_scan"
+	TaskNuclei     Task = "nuclei"
 )
 
 // Task status

@@ -54,10 +54,6 @@ func (r SubfinderResult) GetDomain() string {
 type HttpxInput struct {
 	Domain            string `json:"domain"`
 	HostsFileLocation string `json:"input_blob_path,omitempty"` // The location of where the hosts file is located from blob storage
-	// Future fields could include:
-	// Ports []int `json:"ports,omitempty"`
-	// Threads int `json:"threads,omitempty"`
-	// Timeout time.Duration `json:"timeout,omitempty"`
 }
 
 func (h HttpxInput) GetDomain() string {
@@ -70,22 +66,13 @@ func (h HttpxInput) GetScannerName() string {
 
 // HttpxHostResult represents the result for a single host in httpx
 type HttpxHostResult struct {
-	Host          string       `json:"host"`
-	StatusCode    int          `json:"status_code"`
-	Technologies  []string     `json:"technologies,omitempty"`
-	ContentLength int          `json:"content_length,omitempty"`
-	ContentType   string       `json:"content_type,omitempty"`
-	Server        string       `json:"server,omitempty"`
-	WebServer     string       `json:"web_server,omitempty"`
-	Title         string       `json:"title,omitempty"`
-	ASN           *AsnResponse `json:"asn,omitempty" csv:"asn" mapstructure:"asn"`
-}
-
-type AsnResponse struct {
-	AsNumber  string   `json:"as_number" csv:"as_number"`
-	AsName    string   `json:"as_name" csv:"as_name"`
-	AsCountry string   `json:"as_country" csv:"as_country"`
-	AsRange   []string `json:"as_range" csv:"as_range"`
+	Host          string   `json:"host"`
+	StatusCode    int      `json:"status_code"`
+	Technologies  []string `json:"technologies,omitempty"`
+	ContentLength int      `json:"content_length,omitempty"`
+	ContentType   string   `json:"content_type,omitempty"`
+	WebServer     string   `json:"web_server,omitempty"`
+	Title         string   `json:"title,omitempty"`
 }
 
 // HttpxResult represents the result of an httpx scan
@@ -184,5 +171,60 @@ func (r NaabuResult) GetCount() int {
 }
 
 func (r NaabuResult) GetDomain() string {
+	return r.Domain
+}
+
+// NucleiInput represents input for the nuclei scanner
+type NucleiInput struct {
+	Domain            string `json:"domain"`
+	HostsFileLocation string `json:"input_blob_path,omitempty"` // The location of where the hosts file is located from blob storage
+	Type              string `json:"type,omitempty"`            // Type of nuclei scan (e.g., "http")
+}
+
+func (n NucleiInput) GetDomain() string {
+	return n.Domain
+}
+
+func (n NucleiInput) GetScannerName() string {
+	return "nuclei"
+}
+
+// NucleiVulnerability represents a single vulnerability found by nuclei
+type NucleiVulnerability struct {
+	TemplateID       string            `json:"template_id"`
+	TemplatePath     string            `json:"template_path,omitempty"`
+	Info             NucleiInfo        `json:"info"`
+	Type             string            `json:"type"`
+	Host             string            `json:"host"`
+	MatchedAt        string            `json:"matched_at"`
+	ExtractedResults []string          `json:"extracted_results,omitempty"`
+	Metadata         map[string]string `json:"metadata,omitempty"`
+	Severity         string            `json:"severity"`
+	Description      string            `json:"description,omitempty"`
+	Reference        []string          `json:"reference,omitempty"`
+	Tags             []string          `json:"tags,omitempty"`
+}
+
+// NucleiInfo represents template information
+type NucleiInfo struct {
+	Name        string   `json:"name"`
+	Author      []string `json:"author,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Reference   []string `json:"reference,omitempty"`
+	Severity    string   `json:"severity,omitempty"`
+}
+
+// NucleiResult represents the result of a nuclei scan
+type NucleiResult struct {
+	Domain          string                `json:"domain"`
+	Vulnerabilities []NucleiVulnerability `json:"output"`
+}
+
+func (r NucleiResult) GetCount() int {
+	return len(r.Vulnerabilities)
+}
+
+func (r NucleiResult) GetDomain() string {
 	return r.Domain
 }
