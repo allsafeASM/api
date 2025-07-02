@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
@@ -113,5 +114,40 @@ func (b *BlobStorageClient) StoreSubfinderTextResult(ctx context.Context, result
 	}
 
 	gologger.Debug().Msgf("Stored subfinder txt result in blob: %s/%s", b.containerName, blobName)
+	return nil
+}
+
+// DownloadFile downloads a blob from Azure Blob Storage and saves it to a local file path
+func (b *BlobStorageClient) DownloadFile(ctx context.Context, blobPath string, localPath string) error {
+	cleanPath := b.cleanBlobPath(blobPath)
+	file, err := os.Create(localPath)
+	if err != nil {
+		return fmt.Errorf("failed to create local file %s: %w", localPath, err)
+	}
+	defer file.Close()
+
+	response, err := b.client.DownloadStream(ctx, b.containerName, cleanPath, &azblob.DownloadStreamOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to download blob %s: %w", cleanPath, err)
+	}
+	defer response.Body.Close()
+
+	_, err = io.Copy(file, response.Body)
+	if err != nil {
+		return fmt.Errorf("failed to write blob content to file %s: %w", localPath, err)
+	}
+
+	gologger.Debug().Msgf("Downloaded blob %s/%s to local file %s", b.containerName, cleanPath, localPath)
+	return nil
+}
+
+// DeleteLocalFile deletes a local file at the given path
+func (b *BlobStorageClient) DeleteLocalFile(localPath string) error {
+	err := os.Remove(localPath)
+	if err != nil {
+		gologger.Warning().Msgf("Failed to delete local file: %s, error: %v", localPath, err)
+		return err
+	}
+	gologger.Info().Msgf("Deleted local file: %s", localPath)
 	return nil
 }

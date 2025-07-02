@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/allsafeASM/api/internal/azure"
@@ -113,13 +114,45 @@ func (h *TaskHandler) processTask(ctx context.Context, taskMsg *models.TaskMessa
 		scannerInput = models.SubfinderInput{Domain: result.Domain}
 	case models.TaskHttpx:
 		httpxInput := models.HttpxInput{Domain: result.Domain}
+		var tempFilePath string
 		if taskMsg.FilePath != "" {
-			httpxInput.HostsFileLocation = taskMsg.FilePath
 			gologger.Info().Msgf("Httpx task with hosts file (file_path): %s", taskMsg.FilePath)
+			// Download hosts file from blob and save as temp file using blobClient.DownloadFile
+			if h.blobClient != nil {
+				tmpFile, err := os.CreateTemp("", "httpx-hosts-*.txt")
+				if err != nil {
+					result.Status = models.TaskStatusFailed
+					result.Error = err.Error()
+					gologger.Error().Msgf("Failed to create temp file for hosts: %v", err)
+					h.sendDiscordNotification(ctx, taskMsg, result, err, notification.StepTaskFailed)
+					return h.createFailureResult(err, false)
+				}
+				tmpFile.Close()
+				tempFilePath = tmpFile.Name()
+				err = h.blobClient.DownloadFile(ctx, taskMsg.FilePath, tempFilePath)
+				if err != nil {
+					result.Status = models.TaskStatusFailed
+					result.Error = err.Error()
+					gologger.Error().Msgf("Failed to download hosts file from blob: %v", err)
+					h.sendDiscordNotification(ctx, taskMsg, result, err, notification.StepTaskFailed)
+					return h.createFailureResult(err, false)
+				}
+				httpxInput.InputPath = tempFilePath
+				gologger.Info().Msgf("Saved hosts file to temp path: %s", tempFilePath)
+			}
 		} else {
 			gologger.Info().Msgf("Httpx task without hosts file, domain: %s", result.Domain)
 		}
 		scannerInput = httpxInput
+		// After scan, delete the temp file if it was created using blobClient.DeleteLocalFile
+		defer func() {
+			if tempFilePath != "" && h.blobClient != nil {
+				err := h.blobClient.DeleteLocalFile(tempFilePath)
+				if err != nil {
+					gologger.Warning().Msgf("Failed to delete temp hosts file: %s, error: %v", tempFilePath, err)
+				}
+			}
+		}()
 	case models.TaskDNSResolve:
 		// For DNSX, we can process either a single domain or multiple subdomains
 		// Use the utility function to properly parse subdomains from the input

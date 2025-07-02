@@ -7,7 +7,6 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.1
 	github.com/google/uuid v1.6.0
 	github.com/projectdiscovery/dnsx v1.2.2
-	github.com/projectdiscovery/goflags v0.1.74
 	github.com/projectdiscovery/gologger v1.1.54
 	github.com/projectdiscovery/httpx v1.7.0
 	github.com/projectdiscovery/naabu/v2 v2.3.4
@@ -254,6 +253,7 @@ require (
 	github.com/projectdiscovery/gcache v0.0.0-20241015120333-12546c6e3f4c // indirect
 	github.com/projectdiscovery/go-smb2 v0.0.0-20240129202741-052cc450c6cb // indirect
 	github.com/projectdiscovery/goconfig v0.0.1 // indirect
+	github.com/projectdiscovery/goflags v0.1.74 // indirect
 	github.com/projectdiscovery/gostruct v0.0.2 // indirect
 	github.com/projectdiscovery/gozero v0.0.3 // indirect
 	github.com/projectdiscovery/hmap v0.0.91 // indirect

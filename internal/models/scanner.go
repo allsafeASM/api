@@ -52,8 +52,8 @@ func (r SubfinderResult) GetDomain() string {
 
 // HttpxInput represents input for the httpx scanner
 type HttpxInput struct {
-	Domain            string `json:"domain"`
-	HostsFileLocation string `json:"input_blob_path,omitempty"` // The location of where the hosts file is located from blob storage
+	Domain    string `json:"domain"`
+	InputPath string `json:"input_path,omitempty"` // Local path to the input file for httpx
 }
 
 func (h HttpxInput) GetDomain() string {

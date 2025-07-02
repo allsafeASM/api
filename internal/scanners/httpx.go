@@ -2,12 +2,10 @@ package scanners
 
 import (
 	"context"
-	"strings"
 
 	"github.com/allsafeASM/api/internal/azure"
 	"github.com/allsafeASM/api/internal/common"
 	"github.com/allsafeASM/api/internal/models"
-	"github.com/projectdiscovery/goflags"
 	"github.com/projectdiscovery/gologger"
 	"github.com/projectdiscovery/gologger/levels"
 	"github.com/projectdiscovery/httpx/runner"
@@ -65,40 +63,15 @@ func (s *HttpxScanner) Execute(ctx context.Context, input interface{}) (models.S
 
 	gologger.Info().Msgf("Starting httpx scan for domain: %s", httpxInput.Domain)
 
-	var hosts []string
-	if httpxInput.HostsFileLocation != "" {
-		if s.blobClient == nil {
-			return nil, common.NewValidationError("blob_client", "hosts file location provided but blob client is not initialized")
-		}
-		gologger.Debug().Msgf("Reading hosts file from blob storage: %s", httpxInput.HostsFileLocation)
-		hostsFileContent, err := s.blobClient.ReadHostsFileFromBlob(ctx, httpxInput.HostsFileLocation)
-		if err != nil {
-			return nil, common.NewScannerError("failed to read hosts file from blob storage", err)
-		}
-		for line := range strings.SplitSeq(hostsFileContent, "\n") {
-			clean := strings.TrimSpace(line)
-			if clean != "" {
-				hosts = append(hosts, clean)
-			}
-		}
-		gologger.Debug().Msgf("Loaded %d hosts from blob storage", len(hosts))
-	} else {
-		hosts = []string{httpxInput.Domain}
+	if httpxInput.InputPath == "" {
+		return nil, common.NewValidationError("input_path", "InputPath is required and cannot be empty for httpx scanner")
 	}
 
-	if len(hosts) == 0 {
-		return models.HttpxResult{
-			Domain:  httpxInput.Domain,
-			Results: []models.HttpxHostResult{},
-		}, nil
-	}
-
-	results := make([]models.HttpxHostResult, 0, len(hosts))
-	resultCh := make(chan models.HttpxHostResult, len(hosts))
+	results := make([]models.HttpxHostResult, 0)
+	resultCh := make(chan models.HttpxHostResult, 100)
 	doneCh := make(chan struct{})
 
 	options := runner.Options{
-		InputTargetHost:     goflags.StringSlice{},
 		TechDetect:          true,
 		FollowRedirects:     true,
 		FollowHostRedirects: true,
@@ -106,6 +79,7 @@ func (s *HttpxScanner) Execute(ctx context.Context, input interface{}) (models.S
 		Timeout:             10,
 		Version:             true,
 		Asn:                 true,
+		InputFile:           httpxInput.InputPath,
 		OnResult: func(r runner.Result) {
 			if r.Err != nil {
 				gologger.Debug().Msgf("httpx probe failed for %s: %v", r.Input, r.Err)
@@ -134,9 +108,8 @@ func (s *HttpxScanner) Execute(ctx context.Context, input interface{}) (models.S
 			}
 		},
 	}
-	for _, h := range hosts {
-		options.InputTargetHost = append(options.InputTargetHost, h)
-	}
+
+	gologger.Info().Msgf("Using input file for httpx: %s", httpxInput.InputPath)
 
 	if err := options.ValidateOptions(); err != nil {
 		return nil, common.NewScannerError("invalid httpx options", err)
