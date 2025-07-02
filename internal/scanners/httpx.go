@@ -31,6 +31,18 @@ func (s *HttpxScanner) SetBlobClient(blobClient *azure.BlobStorageClient) {
 	s.blobClient = blobClient
 }
 
+func convertASN(asn *runner.AsnResponse) *models.AsnResponse {
+	if asn == nil {
+		return nil
+	}
+	return &models.AsnResponse{
+		AsNumber:  asn.AsNumber,
+		AsName:    asn.AsName,
+		AsCountry: asn.AsCountry,
+		AsRange:   asn.AsRange,
+	}
+}
+
 func (s *HttpxScanner) Execute(ctx context.Context, input interface{}) (models.ScannerResult, error) {
 
 	// Type assert and validate input
@@ -98,14 +110,20 @@ func (s *HttpxScanner) Execute(ctx context.Context, input interface{}) (models.S
 				gologger.Debug().Msgf("httpx probe failed for %s: %v", r.Input, r.Err)
 				return
 			}
+			finalStatusCode := r.StatusCode
+			if len(r.ChainStatusCodes) > 0 {
+				finalStatusCode = r.ChainStatusCodes[len(r.ChainStatusCodes)-1]
+			}
 			resultCh <- models.HttpxHostResult{
 				Host:          r.Input,
-				StatusCode:    r.StatusCode,
+				URL:           r.URL,
+				StatusCode:    finalStatusCode,
 				Technologies:  r.Technologies,
 				ContentLength: r.ContentLength,
 				ContentType:   r.ContentType,
 				WebServer:     r.WebServer,
 				Title:         r.Title,
+				ASN:           convertASN(r.ASN),
 			}
 		},
 	}

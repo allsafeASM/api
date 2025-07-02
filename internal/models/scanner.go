@@ -66,13 +66,22 @@ func (h HttpxInput) GetScannerName() string {
 
 // HttpxHostResult represents the result for a single host in httpx
 type HttpxHostResult struct {
-	Host          string   `json:"host"`
-	StatusCode    int      `json:"status_code"`
-	Technologies  []string `json:"technologies,omitempty"`
-	ContentLength int      `json:"content_length,omitempty"`
-	ContentType   string   `json:"content_type,omitempty"`
-	WebServer     string   `json:"web_server,omitempty"`
-	Title         string   `json:"title,omitempty"`
+	Host          string       `json:"host"`
+	URL           string       `json:"url"`
+	StatusCode    int          `json:"status_code"`
+	Technologies  []string     `json:"technologies,omitempty"`
+	ContentLength int          `json:"content_length,omitempty"`
+	ContentType   string       `json:"content_type,omitempty"`
+	WebServer     string       `json:"web_server,omitempty"`
+	Title         string       `json:"title,omitempty"`
+	ASN           *AsnResponse `json:"asn,omitempty"`
+}
+
+type AsnResponse struct {
+	AsNumber  string   `json:"as_number" csv:"as_number"`
+	AsName    string   `json:"as_name" csv:"as_name"`
+	AsCountry string   `json:"as_country" csv:"as_country"`
+	AsRange   []string `json:"as_range" csv:"as_range"`
 }
 
 // HttpxResult represents the result of an httpx scan
@@ -191,24 +200,17 @@ func (n NucleiInput) GetScannerName() string {
 
 // NucleiVulnerability represents a single vulnerability found by nuclei
 type NucleiVulnerability struct {
-	TemplateID       string            `json:"template_id"`
-	TemplatePath     string            `json:"template_path,omitempty"`
-	Info             NucleiInfo        `json:"info"`
-	Type             string            `json:"type"`
-	Host             string            `json:"host"`
-	MatchedAt        string            `json:"matched_at"`
-	ExtractedResults []string          `json:"extracted_results,omitempty"`
-	Metadata         map[string]string `json:"metadata,omitempty"`
-	Severity         string            `json:"severity"`
-	Description      string            `json:"description,omitempty"`
-	Reference        []string          `json:"reference,omitempty"`
-	Tags             []string          `json:"tags,omitempty"`
+	TemplateID       string     `json:"template_id"`
+	Info             NucleiInfo `json:"info"`
+	Type             string     `json:"type"`
+	Host             string     `json:"host"`
+	MatchedAt        string     `json:"matched_at"`
+	ExtractedResults []string   `json:"extracted_results,omitempty"`
 }
 
 // NucleiInfo represents template information
 type NucleiInfo struct {
 	Name        string   `json:"name"`
-	Author      []string `json:"author,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
 	Description string   `json:"description,omitempty"`
 	Reference   []string `json:"reference,omitempty"`
