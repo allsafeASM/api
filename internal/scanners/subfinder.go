@@ -72,7 +72,7 @@ func (s *SubfinderScanner) Execute(ctx context.Context, input interface{}) (mode
 	}
 
 	// Process output to extract subdomains
-	subdomains := s.processSubfinderOutput(output.Bytes())
+	subdomains := s.processSubfinderOutput(output.Bytes(), subfinderInput.Domain)
 
 	gologger.Debug().Msgf("Subfinder found %d subdomains for domain: %s", len(subdomains), subfinderInput.Domain)
 
@@ -87,7 +87,7 @@ func (s *SubfinderScanner) Execute(ctx context.Context, input interface{}) (mode
 }
 
 // processSubfinderOutput processes the raw output from subfinder and extracts subdomains
-func (s *SubfinderScanner) processSubfinderOutput(output []byte) []string {
+func (s *SubfinderScanner) processSubfinderOutput(output []byte, domain string) []string {
 	var subdomains []string
 
 	// Split the buffer's content into lines using the newline byte
@@ -102,6 +102,8 @@ func (s *SubfinderScanner) processSubfinderOutput(output []byte) []string {
 			subdomains = append(subdomains, lineStr)
 		}
 	}
+	// Add the domain to the subdomains
+	subdomains = append(subdomains, domain)
 
 	return subdomains
 }
