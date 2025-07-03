@@ -3,6 +3,7 @@ package scanners
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/allsafeASM/api/internal/azure"
 	"github.com/allsafeASM/api/internal/common"
@@ -81,11 +82,33 @@ func (s *NucleiScanner) Execute(ctx context.Context, input interface{}) (models.
 
 	// Create nuclei engine with protocol filtering based on input Type
 	var engineOpts []nuclei.NucleiSDKOptions
+
+	// Set scan strategy to template-spray
+	engineOpts = append(engineOpts, nuclei.WithScanStrategy("template-spray"))
+
+	// Set concurrency options
+	engineOpts = append(engineOpts, nuclei.WithConcurrency(nuclei.Concurrency{
+		TemplateConcurrency:           500,
+		HostConcurrency:               5,
+		HeadlessHostConcurrency:       5,  // reasonable default
+		HeadlessTemplateConcurrency:   25, // reasonable default
+		JavascriptTemplateConcurrency: 25, // reasonable default
+		TemplatePayloadConcurrency:    25, // reasonable default
+		ProbeConcurrency:              50, // reasonable default
+	}))
+
+	// Set rate limit to 1000 requests per second
+	engineOpts = append(engineOpts, nuclei.WithGlobalRateLimitCtx(ctx, 1000, time.Second))
+
+	// Set protocol filters as before
 	if nucleiInput.Type == "http" {
 		engineOpts = append(engineOpts, nuclei.WithTemplateFilters(nuclei.TemplateFilters{ProtocolTypes: "http"}))
 	} else {
 		engineOpts = append(engineOpts, nuclei.WithTemplateFilters(nuclei.TemplateFilters{ExcludeProtocolTypes: "http"}))
 	}
+
+	// Disable template update check
+	engineOpts = append(engineOpts, nuclei.DisableUpdateCheck())
 	ne, err := nuclei.NewNucleiEngineCtx(ctx, engineOpts...)
 	if err != nil {
 		return nil, common.NewScannerError("failed to create nuclei engine", err)
