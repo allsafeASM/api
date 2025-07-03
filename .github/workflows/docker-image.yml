@@ -57,6 +57,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          secrets: "subfinder_config=${{ secrets.SUBFINDER_CONFIG }}"
 
   # --- JOB 2: Call the Reusable Deploy Workflow ---
   # CHANGED: 'deploy' is now correctly indented at the same level as 'build'
