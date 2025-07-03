@@ -49,7 +49,7 @@ func (s *NucleiScanner) Execute(ctx context.Context, input interface{}) (models.
 	default:
 	}
 
-	gologger.Info().Msgf("Starting nuclei scan for domain: %s", nucleiInput.Domain)
+	gologger.Info().Msgf("Starting nuclei scan for domain: %s with type: %s", nucleiInput.Domain, nucleiInput.Type)
 
 	var hosts []string
 	if nucleiInput.HostsFileLocation != "" {

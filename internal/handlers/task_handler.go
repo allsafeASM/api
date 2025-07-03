@@ -266,6 +266,9 @@ func (h *TaskHandler) processTask(ctx context.Context, taskMsg *models.TaskMessa
 		} else {
 			gologger.Info().Msgf("Nuclei task without hosts file, domain: %s", result.Domain)
 		}
+		if taskMsg.Type != "" {
+			nucleiInput.Type = taskMsg.Type
+		}
 		scannerInput = nucleiInput
 	default:
 		scannerInput = models.SubfinderInput{Domain: result.Domain}

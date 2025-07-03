@@ -2,13 +2,13 @@ package models
 
 // TaskMessage represents the structure of messages in the queue
 type TaskMessage struct {
-	Task       Task   `json:"task"`
-	ScanID     int    `json:"scan_id"`
-	Domain     string `json:"domain"`
-	InstanceID string `json:"instance_id"`
-	FilePath   string `json:"input_blob_path,omitempty"` // Optional file path for tools that need file input
-
-	Config map[string]interface{} `json:"config,omitempty"` // Tool-specific configuration
+	Task       Task                   `json:"task"`
+	ScanID     int                    `json:"scan_id"`
+	Domain     string                 `json:"domain"`
+	InstanceID string                 `json:"instance_id"`
+	FilePath   string                 `json:"input_blob_path,omitempty"` // Optional file path for tools that need file input
+	Type       string                 `json:"type,omitempty"`            // Type of nuclei scan (e.g., "http")
+	Config     map[string]interface{} `json:"config,omitempty"`          // Tool-specific configuration
 }
 
 // TaskResult represents the result of a completed task
