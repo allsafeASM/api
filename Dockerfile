@@ -1,3 +1,7 @@
+# Download nuclei templates
+FROM alpine/git:latest AS downloader
+RUN git clone https://github.com/projectdiscovery/nuclei-templates.git /root/nuclei-templates
+
 # Build for AllSafe ASM Worker
 FROM golang:1.24.4-alpine AS builder
 
@@ -34,6 +38,9 @@ RUN apk add --no-cache ca-certificates libpcap
 
 # Copy binary from builder stage
 COPY --from=builder /app/api /api
+
+# Copy nuclei templates from downloader stage
+COPY --from=downloader /root/nuclei-templates /root/nuclei-templates
 
 # Expose port (if needed for health checks)
 EXPOSE 8080
