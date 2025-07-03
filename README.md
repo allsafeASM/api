@@ -20,7 +20,9 @@ api/
 │       └── task.go
 ├── scanners/            # Security scanning tools
 │   ├── subfinder.go
-│   ├── portscanner.go
+│   ├── naabu.go
+│   ├── dnsx.go
+│   ├── nuclei.go
 │   └── httpx.go
 ├── main.go              # Main application (processes tasks from queue)
 └── go.mod
