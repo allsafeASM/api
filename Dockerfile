@@ -35,13 +35,6 @@ RUN apk add --no-cache ca-certificates libpcap
 # Copy binary from builder stage
 COPY --from=builder /app/api /api
 
-# Create the directory for the config file and then mount the secret
-# The 'id' here must match the key used in the workflow's 'secrets' map.
-RUN mkdir -p /root/.config/subfinder
-
-RUN --mount=type=secret,id=subfinder_config \
-    cat /run/secrets/subfinder_config | base64 -d > /root/.config/subfinder/provider-config.yaml
-
 # Expose port (if needed for health checks)
 EXPOSE 8080
 
