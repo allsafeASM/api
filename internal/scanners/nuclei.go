@@ -109,6 +109,11 @@ func (s *NucleiScanner) Execute(ctx context.Context, input interface{}) (models.
 
 	// Disable template update check
 	engineOpts = append(engineOpts, nuclei.DisableUpdateCheck())
+
+	// Set template path to /root/nuclei-templates
+	engineOpts = append(engineOpts, nuclei.WithTemplatesOrWorkflows(nuclei.TemplateSources{
+		Templates: []string{"/root/nuclei-templates"},
+	}))
 	ne, err := nuclei.NewNucleiEngineCtx(ctx, engineOpts...)
 	if err != nil {
 		return nil, common.NewScannerError("failed to create nuclei engine", err)
