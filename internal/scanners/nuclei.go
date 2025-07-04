@@ -83,22 +83,22 @@ func (s *NucleiScanner) Execute(ctx context.Context, input interface{}) (models.
 	// Create nuclei engine with protocol filtering based on input Type
 	var engineOpts []nuclei.NucleiSDKOptions
 
-	// Set scan strategy to template-spray
-	engineOpts = append(engineOpts, nuclei.WithScanStrategy("template-spray"))
+	// Set scan strategy to host-spray for better reliability and maximum coverage
+	engineOpts = append(engineOpts, nuclei.WithScanStrategy("host-spray"))
 
-	// Set concurrency options
+	// Set optimized concurrency for maximum results while reducing dropped requests
 	engineOpts = append(engineOpts, nuclei.WithConcurrency(nuclei.Concurrency{
-		TemplateConcurrency:           500,
-		HostConcurrency:               5,
-		HeadlessHostConcurrency:       5,  // reasonable default
-		HeadlessTemplateConcurrency:   25, // reasonable default
-		JavascriptTemplateConcurrency: 25, // reasonable default
-		TemplatePayloadConcurrency:    25, // reasonable default
-		ProbeConcurrency:              50, // reasonable default
+		TemplateConcurrency:           200, // Reduced from 500 to prevent overwhelming
+		HostConcurrency:               10,  // Increased from 5 for better throughput
+		HeadlessHostConcurrency:       10,  // Increased from 5
+		HeadlessTemplateConcurrency:   50,  // Increased from 25
+		JavascriptTemplateConcurrency: 50,  // Increased from 25
+		TemplatePayloadConcurrency:    50,  // Increased from 25
+		ProbeConcurrency:              100, // Increased from 50
 	}))
 
 	// Set rate limit to 1000 requests per second
-	engineOpts = append(engineOpts, nuclei.WithGlobalRateLimitCtx(ctx, 1000, time.Second))
+	engineOpts = append(engineOpts, nuclei.WithGlobalRateLimitCtx(ctx, 500, time.Second))
 
 	// Set protocol filters as before
 	if nucleiInput.Type == "http" {
@@ -114,6 +114,11 @@ func (s *NucleiScanner) Execute(ctx context.Context, input interface{}) (models.
 	engineOpts = append(engineOpts, nuclei.WithTemplatesOrWorkflows(nuclei.TemplateSources{
 		Templates: []string{"/root/nuclei-templates"},
 	}))
+
+	// Note: Additional options like retries, timeout, and headless mode
+	// are not available in the current Nuclei SDK version
+	// The configuration above focuses on concurrency and rate limiting
+	// to maximize results while reducing dropped requests
 	ne, err := nuclei.NewNucleiEngineCtx(ctx, engineOpts...)
 	if err != nil {
 		return nil, common.NewScannerError("failed to create nuclei engine", err)
