@@ -1,6 +1,6 @@
 # Download nuclei templates
 FROM alpine/git:latest AS downloader
-RUN git clone https://github.com/projectdiscovery/nuclei-templates.git /root/nuclei-templates
+RUN git clone --depth 1 https://github.com/projectdiscovery/nuclei-templates.git /root/nuclei-templates
 
 # Build for AllSafe ASM Worker
 FROM golang:1.24.4-alpine AS builder
