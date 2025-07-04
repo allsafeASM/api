@@ -15,7 +15,6 @@ import (
 	"github.com/allsafeASM/api/internal/models"
 	"github.com/allsafeASM/api/internal/utils"
 	"github.com/projectdiscovery/gologger"
-	"github.com/projectdiscovery/gologger/levels"
 	"github.com/projectdiscovery/naabu/v2/pkg/result"
 	"github.com/projectdiscovery/naabu/v2/pkg/runner"
 )
@@ -336,8 +335,6 @@ func (s *NaabuScanner) executeNaabuScan(ctx context.Context, naabuInput models.N
 
 	// Create naabu runner following the official documentation pattern
 	naabuRunner, err := runner.NewRunner(&options)
-	// Return log level back
-	gologger.DefaultLogger.SetMaxLevel(levels.LevelDebug)
 
 	if err != nil {
 		gologger.Error().Msgf("Failed to create naabu runner: %v", err)
