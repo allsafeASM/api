@@ -48,6 +48,7 @@ func (s *SubfinderScanner) Execute(ctx context.Context, input interface{}) (mode
 		MaxEnumerationTime: 30, // 30 seconds max enumeration time
 		RateLimit:          1000,
 		All:                true,
+		ProviderConfig:     "/root/.config/subfinder/provider-config.yaml",
 		//ExcludeSources:     []string{"bufferover", "crtsh", "dnsdumpster", "hackertarget", "rapiddns", "threatcrowd", "virustotal", "zoomeye"},
 	}
 
