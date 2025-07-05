@@ -9,6 +9,7 @@ import (
 	"github.com/allsafeASM/api/internal/common"
 	"github.com/allsafeASM/api/internal/models"
 	"github.com/projectdiscovery/gologger"
+	"github.com/projectdiscovery/gologger/levels"
 	nuclei "github.com/projectdiscovery/nuclei/v3/lib"
 	"github.com/projectdiscovery/nuclei/v3/pkg/output"
 )
@@ -51,6 +52,9 @@ func (s *NucleiScanner) Execute(ctx context.Context, input interface{}) (models.
 	}
 
 	gologger.Info().Msgf("Starting nuclei scan for domain: %s with type: %s", nucleiInput.Domain, nucleiInput.Type)
+
+	// Set log level to fatal to reduce noise during nuclei execution
+	gologger.DefaultLogger.SetMaxLevel(levels.LevelFatal)
 
 	var hosts []string
 	if nucleiInput.HostsFileLocation != "" {
@@ -115,6 +119,11 @@ func (s *NucleiScanner) Execute(ctx context.Context, input interface{}) (models.
 		Templates: []string{"/root/nuclei-templates"},
 	}))
 
+	// Restore log level to info after nuclei execution
+	defer func() {
+		gologger.DefaultLogger.SetMaxLevel(levels.LevelInfo)
+		gologger.Info().Msgf("Nuclei scan completed for domain: %s", nucleiInput.Domain)
+	}()
 	// Note: Additional options like retries, timeout, and headless mode
 	// are not available in the current Nuclei SDK version
 	// The configuration above focuses on concurrency and rate limiting
