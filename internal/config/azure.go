@@ -19,7 +19,7 @@ func LoadAzureConfig() AzureConfig {
 	return AzureConfig{
 		ServiceBusConnectionString:  getEnv("SERVICEBUS_CONNECTION_STRING", ""),
 		ServiceBusNamespace:         getEnv("SERVICEBUS_NAMESPACE", "asm-queue"),
-		QueueName:                   getEnv("SERVICEBUS_QUEUE_NAME", "tasks"),
+		QueueName:                   getEnv("2", "tasks"),
 		BlobStorageConnectionString: getEnv("BLOB_STORAGE_CONNECTION_STRING", ""),
 		BlobContainerName:           getEnv("BLOB_CONTAINER_NAME", "scans"),
 	}

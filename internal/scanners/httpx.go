@@ -68,13 +68,14 @@ func (s *HttpxScanner) Execute(ctx context.Context, input interface{}) (models.S
 	}
 
 	results := make([]models.HttpxHostResult, 0)
-	resultCh := make(chan models.HttpxHostResult, 100)
+	resultCh := make(chan models.HttpxHostResult, 1000)
 	doneCh := make(chan struct{})
 
 	options := runner.Options{
 		TechDetect:          true,
 		FollowRedirects:     true,
-		FollowHostRedirects: true,
+		FollowHostRedirects: false,
+		MaxRedirects:        10, // Add explicit MaxRedirects setting
 		Threads:             80,
 		Timeout:             10,
 		Version:             true,
@@ -85,20 +86,11 @@ func (s *HttpxScanner) Execute(ctx context.Context, input interface{}) (models.S
 				gologger.Debug().Msgf("httpx probe failed for %s: %v", r.Input, r.Err)
 				return
 			}
-			finalStatusCode := r.StatusCode
-			if len(r.ChainStatusCodes) > 0 {
-				finalStatusCode = r.ChainStatusCodes[len(r.ChainStatusCodes)-1]
-			}
-
-			finalURL := r.URL
-			if len(r.Chain) > 0 {
-				finalURL = r.Chain[len(r.Chain)-1].RequestURL
-			}
 
 			resultCh <- models.HttpxHostResult{
 				Host:          r.Input,
-				URL:           finalURL,
-				StatusCode:    finalStatusCode,
+				URL:           r.URL,
+				StatusCode:    r.StatusCode,
 				Technologies:  r.Technologies,
 				ContentLength: r.ContentLength,
 				ContentType:   r.ContentType,
@@ -122,7 +114,7 @@ func (s *HttpxScanner) Execute(ctx context.Context, input interface{}) (models.S
 	defer httpxRunner.Close()
 
 	// Disable httpx runner logs
-	gologger.DefaultLogger.SetMaxLevel(levels.LevelFatal)
+	//gologger.DefaultLogger.SetMaxLevel(levels.LevelFatal)
 	defer gologger.DefaultLogger.SetMaxLevel(levels.LevelInfo)
 
 	// Run in a goroutine so we can respect context cancellation

@@ -287,6 +287,7 @@ func (s *NaabuScanner) executeNaabuScan(ctx context.Context, naabuInput models.N
 	options.Passive = false           // Ensure active scanning
 	options.WithHostDiscovery = false // Skip host discovery for faster scanning
 	options.ScanType = "s"            // Use SYN scan for faster scanning (SynScan constant)
+	options.ExcludeCDN = true         // Exclude CDN IPs from the scan
 
 	// Set up the OnResult callback following the official documentation pattern
 	options.OnResult = func(hr *result.HostResult) {

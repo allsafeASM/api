@@ -40,7 +40,7 @@ func Load() *Config {
 func LoadAppConfig() AppConfig {
 	return AppConfig{
 		LogLevel:                   getEnv("LOG_LEVEL", "info"),
-		PollInterval:               getEnvAsInt("POLL_INTERVAL", 5),
+		PollInterval:               getEnvAsInt("POLL_INTERVAL", 2),
 		ScannerTimeout:             getEnvAsInt("SCANNER_TIMEOUT", 7200),       // 2 hours
 		LockRenewalInterval:        getEnvAsInt("LOCK_RENEWAL_INTERVAL", 30),   // 30 seconds
 		MaxLockRenewalTime:         getEnvAsInt("MAX_LOCK_RENEWAL_TIME", 3600), // 1 hour

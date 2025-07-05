@@ -3,8 +3,11 @@ package scanners
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -20,12 +23,15 @@ import (
 // SubfinderScanner implements the Scanner interface for subfinder
 type SubfinderScanner struct {
 	*BaseScanner
+	apiKey string
 }
 
 // NewSubfinderScanner creates a new subfinder scanner
 func NewSubfinderScanner() *SubfinderScanner {
+	apiKey := os.Getenv("SUBDOMAIN_API_KEY")
 	return &SubfinderScanner{
 		BaseScanner: NewBaseScanner(),
+		apiKey:      apiKey,
 	}
 }
 
@@ -41,6 +47,87 @@ func (s *SubfinderScanner) Execute(ctx context.Context, input interface{}) (mode
 		return nil, err
 	}
 
+	// Collect subdomains from multiple sources
+	var allSubdomains []string
+
+	// 1. Get subdomains from API if API key is available
+	if s.apiKey != "" {
+		apiSubdomains, err := s.fetchSubdomainsFromAPI(ctx, subfinderInput.Domain)
+		if err != nil {
+			gologger.Warning().Msgf("Failed to fetch subdomains from API: %v", err)
+		} else {
+			allSubdomains = append(allSubdomains, apiSubdomains...)
+			gologger.Info().Msgf("API found %d subdomains for domain: %s", len(apiSubdomains), subfinderInput.Domain)
+		}
+	}
+
+	// 2. Get subdomains from subfinder tool
+	subfinderSubdomains, err := s.runSubfinder(ctx, subfinderInput.Domain)
+	if err != nil {
+		gologger.Warning().Msgf("Failed to run subfinder: %v", err)
+	} else {
+		allSubdomains = append(allSubdomains, subfinderSubdomains...)
+		gologger.Info().Msgf("Subfinder found %d subdomains for domain: %s", len(subfinderSubdomains), subfinderInput.Domain)
+	}
+
+	// Remove duplicates and sort
+	uniqueSubdomains := s.removeDuplicates(allSubdomains)
+	sort.Strings(uniqueSubdomains)
+
+	// Ensure the main domain is included
+	if !s.contains(uniqueSubdomains, subfinderInput.Domain) {
+		uniqueSubdomains = append(uniqueSubdomains, subfinderInput.Domain)
+		sort.Strings(uniqueSubdomains)
+	}
+
+	gologger.Info().Msgf("Total unique subdomains found: %d for domain: %s", len(uniqueSubdomains), subfinderInput.Domain)
+
+	return models.SubfinderResult{
+		Domain:     subfinderInput.Domain,
+		Subdomains: uniqueSubdomains,
+	}, nil
+}
+
+// fetchSubdomainsFromAPI makes an HTTP request to the subdomain API endpoint
+func (s *SubfinderScanner) fetchSubdomainsFromAPI(ctx context.Context, domain string) ([]string, error) {
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	// Create request
+	url := fmt.Sprintf("https://api.subbdom.com/v1/search?z=%s", domain)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Add API key header
+	req.Header.Set("x-api-key", s.apiKey)
+
+	// Make the request
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned non-200 status: %d", resp.StatusCode)
+	}
+
+	// Parse JSON response
+	var subdomains []string
+	if err := json.NewDecoder(resp.Body).Decode(&subdomains); err != nil {
+		return nil, fmt.Errorf("failed to decode JSON response: %w", err)
+	}
+
+	return subdomains, nil
+}
+
+// runSubfinder executes the subfinder tool and returns the results
+func (s *SubfinderScanner) runSubfinder(ctx context.Context, domain string) ([]string, error) {
 	// Configure Subfinder options with optimized settings
 	subfinderOpts := &runner.Options{
 		Threads:            10,
@@ -62,7 +149,7 @@ func (s *SubfinderScanner) Execute(ctx context.Context, input interface{}) (mode
 	output := &bytes.Buffer{}
 
 	// Run subfinder with context
-	if _, err = subfinder.EnumerateSingleDomainWithCtx(ctx, subfinderInput.Domain, []io.Writer{output}); err != nil {
+	if _, err = subfinder.EnumerateSingleDomainWithCtx(ctx, domain, []io.Writer{output}); err != nil {
 		// Check if context was cancelled
 		select {
 		case <-ctx.Done():
@@ -73,22 +160,17 @@ func (s *SubfinderScanner) Execute(ctx context.Context, input interface{}) (mode
 	}
 
 	// Process output to extract subdomains
-	subdomains := s.processSubfinderOutput(output.Bytes(), subfinderInput.Domain)
-
-	gologger.Debug().Msgf("Subfinder found %d subdomains for domain: %s", len(subdomains), subfinderInput.Domain)
+	subdomains := s.processSubfinderOutput(output.Bytes())
 
 	// Print the scan statistics
 	stats := subfinder.GetStatistics()
 	printStatistics(stats)
 
-	return models.SubfinderResult{
-		Domain:     subfinderInput.Domain,
-		Subdomains: subdomains,
-	}, nil
+	return subdomains, nil
 }
 
 // processSubfinderOutput processes the raw output from subfinder and extracts subdomains
-func (s *SubfinderScanner) processSubfinderOutput(output []byte, domain string) []string {
+func (s *SubfinderScanner) processSubfinderOutput(output []byte) []string {
 	var subdomains []string
 
 	// Split the buffer's content into lines using the newline byte
@@ -103,10 +185,33 @@ func (s *SubfinderScanner) processSubfinderOutput(output []byte, domain string) 
 			subdomains = append(subdomains, lineStr)
 		}
 	}
-	// Add the domain to the subdomains
-	subdomains = append(subdomains, domain)
 
 	return subdomains
+}
+
+// removeDuplicates removes duplicate subdomains from the slice
+func (s *SubfinderScanner) removeDuplicates(subdomains []string) []string {
+	seen := make(map[string]bool)
+	var result []string
+
+	for _, subdomain := range subdomains {
+		if !seen[subdomain] {
+			seen[subdomain] = true
+			result = append(result, subdomain)
+		}
+	}
+
+	return result
+}
+
+// contains checks if a slice contains a specific string
+func (s *SubfinderScanner) contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *SubfinderScanner) GetName() string {

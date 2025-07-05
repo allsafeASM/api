@@ -42,6 +42,14 @@ COPY --from=builder /app/api /api
 # Copy nuclei templates from downloader stage
 COPY --from=downloader /root/nuclei-templates /root/nuclei-templates
 
+# Create subfinder config directory and copy provider configuration
+RUN mkdir -p /root/.config/subfinder
+COPY config/subfinder-providers.yaml /root/.config/subfinder/provider-config.yaml
+
+# Create nuclei config directory and copy ignore file
+RUN mkdir -p /root/.config/nuclei
+COPY config/.nuclei-ignore /root/.config/nuclei/.nuclei-ignore
+
 # Expose port (if needed for health checks)
 EXPOSE 8080
 
