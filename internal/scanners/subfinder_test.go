@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -128,12 +129,11 @@ func TestSubfinderScannerWithAPI(t *testing.T) {
 
 	// Create test input
 	input := models.SubfinderInput{
-		Domain: "example.com",
+		Domain: "psu.edu.eg",
 	}
 
 	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	ctx := context.Background()
 
 	// Execute the scanner
 	result, err := scanner.Execute(ctx, input)
@@ -352,4 +352,110 @@ func TestContains(t *testing.T) {
 	if scanner.contains(slice, "d") {
 		t.Error("Expected slice to not contain 'd'")
 	}
+}
+
+// TestSubfinderScannerPSUEduEg tests the subfinder scanner on the specific domain psu.edu.eg
+func TestSubfinderScannerPSUEduEg(t *testing.T) {
+	// Create a subfinder scanner
+	scanner := NewSubfinderScanner()
+
+	// Create test input for psu.edu.eg
+	input := models.SubfinderInput{
+		Domain: "psu.edu.eg",
+	}
+
+	// Create context with longer timeout for real domain scanning
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	t.Logf("Starting subfinder scan for domain: %s", input.Domain)
+
+	// Execute the scanner
+	result, err := scanner.Execute(ctx, input)
+	if err != nil {
+		t.Fatalf("Failed to execute subfinder scanner: %v", err)
+	}
+
+	// Type assert the result
+	subfinderResult, ok := result.(models.SubfinderResult)
+	if !ok {
+		t.Fatalf("Expected SubfinderResult, got %T", result)
+	}
+
+	// Log the results
+	t.Logf("=== Subfinder Results for %s ===", input.Domain)
+	t.Logf("Total subdomains found: %d", len(subfinderResult.Subdomains))
+	t.Logf("Domain: %s", subfinderResult.Domain)
+
+	// Verify the results
+	if subfinderResult.Domain != input.Domain {
+		t.Errorf("Expected domain '%s', got '%s'", input.Domain, subfinderResult.Domain)
+	}
+
+	if len(subfinderResult.Subdomains) == 0 {
+		t.Error("Expected subdomains to be found, got empty slice")
+	}
+
+	// Verify that the domain itself is included in the results
+	foundDomain := false
+	for _, subdomain := range subfinderResult.Subdomains {
+		if subdomain == input.Domain {
+			foundDomain = true
+			break
+		}
+	}
+
+	if !foundDomain {
+		t.Errorf("Expected domain '%s' to be included in subdomains list", input.Domain)
+	}
+
+	// Log all found subdomains
+	t.Logf("Found subdomains:")
+	for i, subdomain := range subfinderResult.Subdomains {
+		t.Logf("  %d. %s", i+1, subdomain)
+	}
+
+	// Additional validation: check if subdomains are valid for the domain
+	for _, subdomain := range subfinderResult.Subdomains {
+		if !isValidSubdomain(subdomain, input.Domain) {
+			t.Errorf("Invalid subdomain returned: %s for domain: %s", subdomain, input.Domain)
+		}
+	}
+
+	// Performance metrics
+	t.Logf("=== Performance Summary ===")
+	t.Logf("Total unique subdomains: %d", len(subfinderResult.Subdomains))
+
+	// Check for common subdomain patterns
+	commonPatterns := map[string]int{
+		"www":     0,
+		"mail":    0,
+		"api":     0,
+		"admin":   0,
+		"blog":    0,
+		"dev":     0,
+		"test":    0,
+		"staging": 0,
+		"cdn":     0,
+		"ftp":     0,
+		"ssh":     0,
+		"vpn":     0,
+	}
+
+	for _, subdomain := range subfinderResult.Subdomains {
+		for pattern := range commonPatterns {
+			if strings.Contains(subdomain, pattern) {
+				commonPatterns[pattern]++
+			}
+		}
+	}
+
+	t.Logf("Common subdomain patterns found:")
+	for pattern, count := range commonPatterns {
+		if count > 0 {
+			t.Logf("  %s: %d", pattern, count)
+		}
+	}
+
+	t.Logf("=== Test completed successfully ===")
 }
