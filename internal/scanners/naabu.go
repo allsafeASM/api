@@ -15,6 +15,7 @@ import (
 	"github.com/allsafeASM/api/internal/models"
 	"github.com/allsafeASM/api/internal/utils"
 	"github.com/projectdiscovery/gologger"
+	"github.com/projectdiscovery/gologger/levels"
 	"github.com/projectdiscovery/naabu/v2/pkg/result"
 	"github.com/projectdiscovery/naabu/v2/pkg/runner"
 )
@@ -348,7 +349,12 @@ func (s *NaabuScanner) executeNaabuScan(ctx context.Context, naabuInput models.N
 
 	// Execute the scan following the official documentation pattern
 	gologger.Debug().Msgf("Starting naabu enumeration...")
+	gologger.DefaultLogger.SetMaxLevel(levels.LevelFatal)
+
 	err = naabuRunner.RunEnumeration(ctx)
+
+	gologger.DefaultLogger.SetMaxLevel(levels.LevelInfo)
+
 	if err != nil {
 		gologger.Error().Msgf("Naabu enumeration failed: %v", err)
 		return nil, common.NewScannerError("naabu scan failed", err)

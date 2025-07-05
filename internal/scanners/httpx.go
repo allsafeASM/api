@@ -114,7 +114,7 @@ func (s *HttpxScanner) Execute(ctx context.Context, input interface{}) (models.S
 	defer httpxRunner.Close()
 
 	// Disable httpx runner logs
-	//gologger.DefaultLogger.SetMaxLevel(levels.LevelFatal)
+	gologger.DefaultLogger.SetMaxLevel(levels.LevelFatal)
 	defer gologger.DefaultLogger.SetMaxLevel(levels.LevelInfo)
 
 	// Run in a goroutine so we can respect context cancellation
